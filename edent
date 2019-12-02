@@ -1,0 +1,89 @@
+#!/usr/bin/env escript
+%% -*- erlang -*-
+%%! -sname edent debug verbose
+
+main([Input, Output | _ ]) ->
+    {ok, Data} = file:read_file(Input),
+    Lines = process(binary:split(Data, <<"\n">>, [global])),
+    ok = file:write_file(Output, lists:join($\n, Lines)),
+    halt(0);
+main(_) ->
+    io:fwrite(standard_error, "usage: nedent <input> <output>\n", []),
+    halt(1).
+
+process(Input) ->
+    process(0, 0, Input, []).
+
+process(_, _, [], Output) ->
+    lists:reverse(Output);
+process(N, Indent, [Line | Input], Output) ->
+    Trimmed = trim(Line),
+    NewIndent = count(Trimmed, Indent),
+    Indented = indent(Trimmed, Indent),
+
+    io:format("line: n=~p, indent=~p, count=~p, \nsrc: ~p\ntrm: ~p\ndst: ~p\n\n",
+              [N, Indent, NewIndent, Line, Trimmed, Indented]),
+    process(N + 1, NewIndent, Input, [Indented | Output]).
+
+count(<<$<, $<, Rest/binary>>, Indent) ->
+    count(Rest, Indent + 1);
+count(<<$>, $>, Rest/binary>>, Indent) ->
+    count(Rest, Indent - 1);
+count(<<$(, Rest/binary>>, Indent) ->
+    count(Rest, Indent + 1);
+count(<<$), Rest/binary>>, Indent) ->
+    count(Rest, Indent - 1);
+count(<<${, Rest/binary>>, Indent) ->
+    count(Rest, Indent + 1);
+count(<<$}, Rest/binary>>, Indent) ->
+    count(Rest, Indent - 1);
+
+count(<<$-, $>, Rest/binary>>, Indent) ->
+    count(Rest, Indent + 1);
+count(<<$., Rest/binary>>, Indent) ->
+    count(Rest, Indent - 1);
+count(<<$;, Rest/binary>>, Indent) ->
+    count(Rest, Indent - 1);
+count(<<$o, $f, Rest/binary>>, Indent) ->
+    count(Rest, Indent + 1);
+count(<<$e, $n, $d, Rest/binary>>, Indent) ->
+    count(Rest, Indent - 1);
+
+%% erlang pragmas are annoying...
+count(<<$-, Rest/binary>>, 0 = Indent) ->
+    count(Rest, Indent + 1);
+
+%% comments...
+count(<<$%, _/binary>>, Indent) ->
+    Indent;
+
+%% strings...
+count(<<$", Rest/binary>>, Indent) ->
+    count(skip_string(Rest), Indent);
+
+count(<<_:8, Rest/binary>>, Indent) ->
+    count(Rest, Indent);
+count(<<>>, Indent) ->
+    Indent.
+
+skip_string(<<$\\, $", Rest/binary>>) ->
+    skip_string(Rest);
+skip_string(<<$", Rest/binary>>) ->
+    Rest;
+skip_string(<<_:8, Rest/binary>>) ->
+    skip_string(Rest).
+
+indent(<<>>, _) ->
+    <<>>;
+indent(Line, Indent) ->
+    [lists:duplicate(Indent * 4, $\s), Line].
+
+trim(<<$\s, Rest/binary>>) ->
+    trim(Rest);
+trim(<<$\t, Rest/binary>>) ->
+    trim(Rest);
+trim(<<$\r, Rest/binary>>) ->
+    trim(Rest);
+trim(Rest) ->
+    Rest.
+
