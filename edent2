@@ -1,0 +1,111 @@
+#!/usr/bin/env escript
+%% -*- erlang -*-
+%%! -sname edent debug verbose
+
+main([Input, Output | _ ]) ->
+    {ok, Data} = file:read_file(Input),
+    {ok, Tokens, _} = erl_scan:string(binary_to_list(Data), 0, [return]),
+    ok = file:write_file(Output, process(Tokens)),
+    halt(0);
+main(_) ->
+    io:fwrite(standard_error, "usage: nedent <input> <output>\n", []),
+    halt(1).
+
+
+-record(state, {
+    indent = 0 :: pos_integer(),
+    in_case = false :: boolean(),
+    in_where = false :: boolean()
+}).
+
+
+process(Tokens) ->
+    process(Tokens, [], #state{}).
+
+process([], Output, _) ->
+    lists:reverse(Output);
+process(Tokens, Output, State) ->
+    {Line, Rest} = next_line(Tokens),
+    {LineFmt, StateFmt} = format_line(Line, State),
+    process(Rest, [LineFmt | Output], StateFmt).
+
+
+next_line(Tokens) ->
+    next_line(Tokens, []).
+
+next_line([{white_space, _, "\n"} | Rest], Acc) ->
+    {lists:reverse(Acc), Rest};
+next_line([] = Rest, Acc) ->
+    {lists:reverse(Acc), Rest};
+next_line([{Cat, _, Value} | Rest], Acc) ->
+    next_line(Rest, [{Cat, Value} | Acc]);
+next_line([{Cat, _} | Rest], Acc) ->
+    next_line(Rest, [Cat | Acc]).
+
+
+format_line(Line, #state{ indent = Indent } = State) ->
+    Trimmed = lists:reverse(trim(lists:reverse(trim(Line)))),
+    LineIndent = Indent + count_head(Trimmed, State),
+    format_line(Trimmed, [lists:duplicate(LineIndent * 4, $\s)], State).
+
+format_line([], Output, State) ->
+    {lists:reverse([$\n | Output]), State};
+format_line([{_, Text} | Rest], Output, State) ->
+    format_line(Rest, [Text | Output], State);
+format_line([Token | Rest], Output, State) ->
+    format_line(Rest, [atom_to_list(Token) | Output], state(Token, State)).
+
+
+trim([]) ->
+    [];
+trim([{white_space, _} | Rest]) ->
+    trim(Rest);
+trim(Tokens) ->
+    Tokens.
+
+
+count_head(Tokens, State) ->
+    count_head(Tokens, 0, State).
+
+count_head([], Count, _) ->
+    Count;
+count_head(['of' | Rest], Count, #state{ in_case = true } = State) ->
+    count_head(Rest, Count - 1, State);
+count_head(['->' | Rest], Count, #state{ in_where = true } = State) ->
+    count_head(Rest, Count - 1, State);
+count_head([Token | Rest], Count, State) ->
+    case indent(Token) of
+        -1 -> count_head(Rest, Count - 1, State);
+        _ -> Count
+    end.
+
+
+indent('(') -> +1;
+indent(')') -> -1;
+indent('[') -> +1;
+indent(']') -> -1;
+indent('#{') -> +1;
+indent('{') -> +1;
+indent('}') -> -1;
+indent(';') -> -1;
+indent('.') -> -1;
+indent('->') -> +1;
+indent('<<') -> +1;
+indent('>>') -> -1;
+indent('end') -> -1;
+indent('of') -> +1;
+indent('case') -> +1;
+indent('where') -> +1;
+indent(_) -> 0.
+
+
+state('case', #state{ indent = Indent } = State) ->
+    State#state{ indent = Indent + 1, in_case = true };
+state('of', State) ->
+    State#state{ in_case = false };
+state('where', #state{ indent = Indent } = State) ->
+    State#state{ indent = Indent + 1, in_where = true };
+state('->', State) ->
+    State#state{ in_where = false };
+state(Token, #state{ indent = Indent } = State) ->
+    State#state{ indent = Indent + indent(Token) }.
