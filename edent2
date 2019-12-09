@@ -118,6 +118,20 @@ trim(Tokens) ->
     Tokens.
 
 
+indent('(') -> +1;
+indent(')') -> -1;
+indent('[') -> +1;
+indent(']') -> -1;
+indent('#{') -> +1;
+indent('{') -> +1;
+indent('}') -> -1;
+indent(';') -> -1;
+indent('.') -> -1;
+indent('<<') -> +1;
+indent('>>') -> -1;
+indent(_) -> 0.
+
+
 count_head(Tokens, State) ->
     count_head(Tokens, 0, State).
 
@@ -133,6 +147,8 @@ count_head(['of' | _], _, State) ->
 
 count_head(['after' | Rest], Count, #state{ stack = ['receive' | _] } = State) ->
     count_head(Rest, Count - 1, State);
+count_head(['after' | Rest], Count, #state{ stack = [match | _] } = State) ->
+    count_head(Rest, Count - 1, State);
 count_head(['after' | _], _, State) ->
     throw({unmatched_after, State});
 
@@ -140,10 +156,14 @@ count_head(['catch' | Rest], Count, #state{ stack = ['try' | _] } = State) ->
     count_head(Rest, Count - 1, State);
 count_head(['catch' | Rest], Count, #state{ stack = [match | _] } = State) ->
     count_head(Rest, Count - 1, State);
+count_head(['catch' | Rest], Count, State) ->
+    count_head(Rest, Count, State);
 
 count_head(['->' | Rest], Count, #state{ stack = ['when' | _] } = State) ->
     count_head(Rest, Count - 1, State);
 
+count_head(['end' | Rest], Count, #state{ stack = ['try' | _] } = State) ->
+    count_head(Rest, Count - 1, State);
 count_head(['end' | Rest], Count, #state{ stack = [block | _] } = State) ->
     count_head(Rest, Count - 1, State);
 count_head(['end' | Rest], Count, #state{ stack = [match | _] } = State) ->
@@ -156,20 +176,6 @@ count_head([Token | Rest], Count, State) ->
         -1 -> count_head(Rest, Count - 1, State);
         _ -> Count
     end.
-
-
-indent('(') -> +1;
-indent(')') -> -1;
-indent('[') -> +1;
-indent(']') -> -1;
-indent('#{') -> +1;
-indent('{') -> +1;
-indent('}') -> -1;
-indent(';') -> -1;
-indent('.') -> -1;
-indent('<<') -> +1;
-indent('>>') -> -1;
-indent(_) -> 0.
 
 
 state('case', #state{ indent = Indent, stack = Stack } = State) ->
@@ -197,13 +203,15 @@ state('catch', #state{ stack = ['try' | Stack] } = State) ->
 state('catch', #state{ stack = [match | Stack] } = State) ->
     State#state{ stack = [match | Stack] };
 state('catch', #state{ indent = Indent, stack = Stack } = State) ->
-    State#state{ indent = Indent + 1, stack = [match | Stack] };
+    State#state{ indent = Indent, stack = Stack };
 
 state('after', #state{ indent = Indent, stack = [match | Stack] } = State) ->
     State#state{ indent = Indent, stack = [match | Stack] };
 state('after', State) ->
     throw({unmatched_after, State});
 
+state('end', #state{ indent = Indent, stack = ['try' | Stack] } = State) ->
+    State#state{ indent = Indent - 1, stack = Stack };
 state('end', #state{ indent = Indent, stack = [match | Stack] } = State) ->
     State#state{ indent = Indent - 2, stack = Stack };
 state('end', #state{ indent = Indent, stack = [block | Stack] } = State) ->
