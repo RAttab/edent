@@ -69,6 +69,9 @@ format_line([Token | Rest], Output, State) ->
 %% original [$\\, $\n] it decides to replace it by $\n at which point
 %% it's impossible to tell what the original was and we just have to
 %% make a wild guess instead.
+%%
+%% TODO: Is this even necessary? You should be using ~n syntax for
+%% formats anyway.
 escape($\e) -> [$\\, $e];
 escape($\f) -> [$\\, $f];
 escape($\n) -> [$\\, $n];
@@ -79,20 +82,32 @@ escape(C) -> C.
 escape([], Acc) -> lists:reverse(Acc);
 escape([C | Rest], Acc) -> escape(Rest, [escape(C) | Acc]).
 
-token_to_list({_, Atom}) when is_atom(Atom) ->
-    atom_to_list(Atom);
-token_to_list({string, Value}) ->
-    [$\", escape(Value, []), $\"];
-token_to_list({integer, Value}) ->
-    integer_to_binary(Value);
-token_to_list({float, Value}) ->
-    float_to_binary(Value);
-token_to_list({_, Text}) ->
-    Text;
-token_to_list(dot) ->
-    $.;
-token_to_list(Atom) when is_atom(Atom)->
-    atom_to_list(Atom).
+
+is_safe_atom([C | _]) when C < $a orelse C > $z ->
+    false;
+is_safe_atom(List) ->
+    lists:all(fun (C) when C >= $a andalso C =< $z -> true;
+                  (C) when C >= $A andalso C =< $A -> true;
+                  (C) when C =:= $_ orelse C =:= $@ -> true;
+                  (_) -> false end, List).
+
+quoted_atom_to_list(Atom) ->
+    List = atom_to_list(Atom),
+    case is_safe_atom(List) of
+        true -> List;
+        false -> [$', List, $']
+    end.
+
+
+token_to_list({char, Char}) -> [$$, Char];
+token_to_list({atom, Atom}) -> quoted_atom_to_list(Atom);
+token_to_list({string, Value}) -> [$\", escape(Value, []), $\"];
+token_to_list({integer, Value}) -> integer_to_binary(Value);
+token_to_list({float, Value}) -> float_to_binary(Value);
+token_to_list({_, Atom}) when is_atom(Atom) -> atom_to_list(Atom);
+token_to_list({_, Text}) -> Text;
+token_to_list(dot) -> $.;
+token_to_list(Atom) when is_atom(Atom) -> atom_to_list(Atom).
 
 
 trim([]) ->
