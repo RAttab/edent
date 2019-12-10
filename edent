@@ -4,86 +4,272 @@
 
 main([Input, Output | _ ]) ->
     {ok, Data} = file:read_file(Input),
-    Lines = process(binary:split(Data, <<"\n">>, [global])),
-    ok = file:write_file(Output, lists:join($\n, Lines)),
+    {ok, Tokens, _} = erl_scan:string(binary_to_list(Data), 0, [return]),
+    ok = file:write_file(Output, process(Tokens)),
     halt(0);
 main(_) ->
-    io:fwrite(standard_error, "usage: nedent <input> <output>\n", []),
+    io:fwrite(standard_error, "usage: edent <input> <output>~n", []),
     halt(1).
 
-process(Input) ->
-    process(0, 0, Input, []).
 
-process(_, _, [], Output) ->
+-record(state, {
+    indent = 0 :: pos_integer(),
+    stack = [] :: list(atom())
+}).
+
+
+process(Tokens) ->
+    process(Tokens, [], #state{}).
+
+process([], Output, _) ->
     lists:reverse(Output);
-process(N, Indent, [Line | Input], Output) ->
-    Trimmed = trim(Line),
-    NewIndent = count(Trimmed, Indent),
-    Indented = indent(Trimmed, Indent),
+process(Tokens, Output, State) ->
+    erlang:display('------------------------'),
+    {Line, Rest} = next_line(Tokens),
+    erlang:display({line, State, Line}),
+    {LineFmt, StateFmt} = format_line(Line, State),
+    erlang:display({fmt, StateFmt, LineFmt}),
+    io:format(iolist_to_binary(LineFmt)),
+    process(Rest, [LineFmt | Output], StateFmt).
 
-    io:format("line: n=~p, indent=~p, count=~p, \nsrc: ~p\ntrm: ~p\ndst: ~p\n\n",
-              [N, Indent, NewIndent, Line, Trimmed, Indented]),
-    process(N + 1, NewIndent, Input, [Indented | Output]).
 
-count(<<$<, $<, Rest/binary>>, Indent) ->
-    count(Rest, Indent + 1);
-count(<<$>, $>, Rest/binary>>, Indent) ->
-    count(Rest, Indent - 1);
-count(<<$(, Rest/binary>>, Indent) ->
-    count(Rest, Indent + 1);
-count(<<$), Rest/binary>>, Indent) ->
-    count(Rest, Indent - 1);
-count(<<${, Rest/binary>>, Indent) ->
-    count(Rest, Indent + 1);
-count(<<$}, Rest/binary>>, Indent) ->
-    count(Rest, Indent - 1);
+%% So you can omit the body of a receive which completely changes the
+%% way you indent things so we have to detect and mark the receives
+%% with no pattern matching so we can tread it differently. WHEEEEE!
+scan_receive([{white_space, _, _} | Rest]) ->
+    scan_receive(Rest);
+scan_receive([{'after', _} | _]) ->
+    receive_nomatch;
+scan_receive(_) ->
+    'receive'.
 
-count(<<$-, $>, Rest/binary>>, Indent) ->
-    count(Rest, Indent + 1);
-count(<<$., Rest/binary>>, Indent) ->
-    count(Rest, Indent - 1);
-count(<<$;, Rest/binary>>, Indent) ->
-    count(Rest, Indent - 1);
-count(<<$o, $f, Rest/binary>>, Indent) ->
-    count(Rest, Indent + 1);
-count(<<$e, $n, $d, Rest/binary>>, Indent) ->
-    count(Rest, Indent - 1);
+next_line(Tokens) ->
+    next_line(Tokens, []).
 
-%% erlang pragmas are annoying...
-count(<<$-, Rest/binary>>, 0 = Indent) ->
-    count(Rest, Indent + 1);
+%% The erl_scan eats a \n character if it follows a dot character BUT
+%% not if if there's a space or basically anything in between the two
+%% characters. This is basically impossible to compensate for at this
+%% point so I won't even bother.
+next_line([{dot, _} | Rest], Acc) ->
+    {lists:reverse([dot | Acc]), Rest};
+next_line([{'receive', _} | Rest], Acc) ->
+    next_line(Rest, [scan_receive(Rest) | Acc]);
+next_line([{white_space, _, Text} | Rest], Acc) ->
+    case lists:splitwith(fun (C) -> C /= $\n end, Text) of
+        {_, []} -> next_line(Rest, [{white_space, Text} | Acc]);
+        {_, [$\n | Tail]} -> {lists:reverse(Acc), [{white_space, 0, Tail} | Rest]}
+    end;
+next_line([], Acc) ->
+    {lists:reverse(Acc), []};
+next_line([{Cat, _, Value} | Rest], Acc) ->
+    next_line(Rest, [{Cat, Value} | Acc]);
+next_line([{Cat, _} | Rest], Acc) ->
+    next_line(Rest, [Cat | Acc]).
 
-%% comments...
-count(<<$%, _/binary>>, Indent) ->
-    Indent;
 
-%% strings...
-count(<<$", Rest/binary>>, Indent) ->
-    count(skip_string(Rest), Indent);
+format_line(Line, #state{ indent = Indent } = State) ->
+    case lists:reverse(trim(lists:reverse(trim(Line)))) of
+        [] ->
+            {[$\n], State};
+        Trimmed ->
+            LineIndent = Indent + count_head(Trimmed, State),
+            format_line(Trimmed, [lists:duplicate(LineIndent * 4, $\s)], State)
+    end.
 
-count(<<_:8, Rest/binary>>, Indent) ->
-    count(Rest, Indent);
-count(<<>>, Indent) ->
-    Indent.
+format_line([], Output, State) ->
+    {lists:reverse([$\n | Output]), State};
+format_line([Token | Rest], Output, State) ->
+    erlang:display({token, Token, state(Token, State)}),
+    format_line(Rest, [token_to_list(Token) | Output], state(Token, State)).
 
-skip_string(<<$\\, $", Rest/binary>>) ->
-    skip_string(Rest);
-skip_string(<<$", Rest/binary>>) ->
-    Rest;
-skip_string(<<_:8, Rest/binary>>) ->
-    skip_string(Rest).
 
-indent(<<>>, _) ->
-    <<>>;
-indent(Line, Indent) ->
-    [lists:duplicate(Indent * 4, $\s), Line].
+%% erl_scan is really fucking stupid and instead of keeping the
+%% original [$\\, $\n] it decides to replace it by $\n at which point
+%% it's impossible to tell what the original was and we just have to
+%% make a wild guess instead.
+%%
+%% TODO: Is this even necessary? You should be using ~n syntax for
+%% formats anyway.
+escape($\e) -> [$\\, $e];
+escape($\f) -> [$\\, $f];
+escape($\n) -> [$\\, $n];
+escape($\r) -> [$\\, $n];
+escape($\v) -> [$\\, $v];
+escape(C) -> C.
 
-trim(<<$\s, Rest/binary>>) ->
+escape([], Acc) -> lists:reverse(Acc);
+escape([C | Rest], Acc) -> escape(Rest, [escape(C) | Acc]).
+
+
+is_safe_atom([C | _]) when C < $a orelse C > $z ->
+    false;
+is_safe_atom(List) ->
+    lists:all(fun (C) when C >= $a andalso C =< $z -> true;
+                  (C) when C >= $A andalso C =< $A -> true;
+                  (C) when C =:= $_ orelse C =:= $@ -> true;
+                  (_) -> false end, List).
+
+quoted_atom_to_list(Atom) ->
+    List = atom_to_list(Atom),
+    case is_safe_atom(List) of
+        true -> List;
+        false -> [$', List, $']
+    end.
+
+
+token_to_list({char, Char}) -> [$$, Char];
+token_to_list({atom, Atom}) -> quoted_atom_to_list(Atom);
+token_to_list({string, Value}) -> [$\", escape(Value, []), $\"];
+token_to_list({integer, Value}) -> integer_to_binary(Value);
+token_to_list({float, Value}) -> float_to_binary(Value);
+token_to_list({_, Atom}) when is_atom(Atom) -> atom_to_list(Atom);
+token_to_list({_, Text}) -> Text;
+token_to_list(dot) -> $.;
+token_to_list(receive_nomatch) -> "receive";
+token_to_list(Atom) when is_atom(Atom) -> atom_to_list(Atom).
+
+
+trim([]) ->
+    [];
+trim([{white_space, _} | Rest]) ->
     trim(Rest);
-trim(<<$\t, Rest/binary>>) ->
-    trim(Rest);
-trim(<<$\r, Rest/binary>>) ->
-    trim(Rest);
-trim(Rest) ->
-    Rest.
+trim(Tokens) ->
+    Tokens.
 
+
+indent('(') -> +1;
+indent(')') -> -1;
+indent('[') -> +1;
+indent(']') -> -1;
+indent('#{') -> +1;
+indent('{') -> +1;
+indent('}') -> -1;
+indent(';') -> -1;
+indent('<<') -> +1;
+indent('>>') -> -1;
+indent(_) -> 0.
+
+
+count_head(Tokens, State) ->
+    count_head(Tokens, 0, State).
+
+count_head([], Count, _) ->
+    Count;
+
+count_head(['of' | Rest], Count, #state{ stack = ['case' | _] } = State) ->
+    count_head(Rest, Count - 1, State);
+count_head(['of' | Rest], Count, #state{ stack = ['try' | _] } = State) ->
+    count_head(Rest, Count - 1, State);
+count_head(['of' | _], _, State) ->
+    throw({unmatched_of, State});
+
+count_head(['after' | Rest], Count, #state{ stack = [receive_nomatch | _] } = State) ->
+    count_head(Rest, Count, State);
+count_head(['after' | Rest], Count, #state{ stack = ['receive' | _] } = State) ->
+    count_head(Rest, Count - 1, State);
+count_head(['after' | Rest], Count, #state{ stack = [{match, _} | _] } = State) ->
+    count_head(Rest, Count - 2, State);
+count_head(['after' | _], _, State) ->
+    throw({unmatched_after, State});
+
+count_head(['catch' | Rest], Count, #state{ stack = ['try' | _] } = State) ->
+    count_head(Rest, Count - 1, State);
+count_head(['catch' | Rest], Count, #state{ stack = [{match, _} | _] } = State) ->
+    count_head(Rest, Count - 2, State);
+count_head(['catch' | Rest], Count, State) ->
+    count_head(Rest, Count, State);
+
+count_head(['->' | Rest], Count, #state{ stack = ['when' | _] } = State) ->
+    count_head(Rest, Count - 1, State);
+
+count_head(['end' | Rest], Count, #state{ stack = ['try' | _] } = State) ->
+    count_head(Rest, Count - 1, State);
+count_head(['end' | Rest], Count, #state{ stack = ['after' | _] } = State) ->
+    count_head(Rest, Count - 1, State);
+count_head(['end' | Rest], Count, #state{ stack = [{block, _} | _] } = State) ->
+    count_head(Rest, Count - 1, State);
+count_head(['end' | Rest], Count, #state{ stack = [{match, _} | _] } = State) ->
+    count_head(Rest, Count - 2, State);
+count_head(['end' | _], _, State) ->
+    throw({unmatched_end, State});
+
+count_head([Token | Rest], Count, State) ->
+    case indent(Token) of
+        -1 -> count_head(Rest, Count - 1, State);
+        _ -> Count
+    end.
+
+%% Macros just kinda ignore all the regular syntax stuff so... fuck me
+%% I guess...
+state('-', #state{ indent = 0, stack = Stack } = State) ->
+    State#state{ stack = [macro | Stack] };
+
+state('case', #state{ indent = Indent, stack = Stack } = State) ->
+    State#state{ indent = Indent + 1, stack = ['case' | Stack] };
+state('try', #state{ indent = Indent, stack = Stack } = State) ->
+    State#state{ indent = Indent + 1, stack = ['try' | Stack] };
+state('receive', #state{ indent = Indent, stack = Stack } = State) ->
+    State#state{ indent = Indent + 1, stack = [{match, 'receive'} | Stack] };
+state(receive_nomatch, #state{ stack = Stack } = State) ->
+    State#state{ stack = [receive_nomatch | Stack] };
+state('if', #state{ indent = Indent, stack = Stack } = State) ->
+    State#state{ indent = Indent + 1, stack = [{match, 'if'} | Stack] };
+state('fun', #state{ indent = Indent, stack = Stack } = State) ->
+    State#state{ indent = Indent + 1, stack = [{block, 'fun'} | Stack] };
+state('begin', #state{ indent = Indent, stack = Stack } = State) ->
+    State#state{ indent = Indent + 1, stack = [{block, 'begin'} | Stack] };
+
+state('of', #state{ stack = ['case' | Stack] } = State) ->
+    State#state{ stack = [{match, 'case'} | Stack] };
+state('of', #state{ stack = ['try' | Stack] } = State) ->
+    State#state{ stack = [{match, 'try'} | Stack] };
+state('of', State) ->
+    throw({unmatched_of, State});
+
+state('catch', #state{ stack = ['try' | Stack] } = State) ->
+    State#state{ stack = [{match, 'catch'} | Stack] };
+state('catch', #state{ indent = Indent, stack = [{match, 'try'} | Stack] } = State) ->
+    State#state{ indent = Indent - 1, stack = [{match, 'catch'} | Stack] };
+state('catch', #state{ indent = Indent, stack = Stack } = State) ->
+    State#state{ indent = Indent, stack = Stack };
+
+state('after', #state{ indent = Indent, stack = [{match, 'try'} | Stack] } = State) ->
+    State#state{ indent = Indent - 1, stack = ['after' | Stack] };
+state('after', #state{ indent = Indent, stack = [{match, 'catch'} | Stack] } = State) ->
+    State#state{ indent = Indent - 1, stack = ['after' | Stack] };
+state('after', #state{ indent = Indent, stack = [{match, 'receive'} | Stack] } = State) ->
+    State#state{ indent = Indent - 1, stack = [{match, 'after'} | Stack] };
+state('after', #state{ indent = Indent, stack = [receive_nomatch | Stack] } = State) ->
+    State#state{ indent = Indent + 1, stack = [{match, 'after'} | Stack] };
+state('after', State) ->
+    throw({unmatched_after, State});
+
+state('end', #state{ indent = Indent, stack = ['fun' | Stack] } = State) ->
+    State#state{ indent = Indent - 1, stack = Stack };
+state('end', #state{ indent = Indent, stack = ['try' | Stack] } = State) ->
+    State#state{ indent = Indent - 1, stack = Stack };
+state('end', #state{ indent = Indent, stack = ['after' | Stack] } = State) ->
+    State#state{ indent = Indent - 1, stack = Stack };
+state('end', #state{ indent = Indent, stack = [{block, _} | Stack] } = State) ->
+    State#state{ indent = Indent - 1, stack = Stack };
+state('end', #state{ indent = Indent, stack = [{match, _} | Stack] } = State) ->
+    State#state{ indent = Indent - 2, stack = Stack };
+state('end', State) ->
+    throw({unmatched_end, State});
+
+state(dot, #state{ indent = 0, stack = [macro | Stack] } = State) ->
+    State#state{ stack = Stack };
+state(dot, #state{ indent = Indent, stack = [macro | Stack] } = State) ->
+    State#state{ indent = Indent - 1, stack = Stack };
+state(dot, #state{ indent = Indent } = State) ->
+    State#state{ indent = Indent - 1 };
+
+state('when', #state{ indent = Indent, stack = Stack } = State) ->
+    State#state{ indent = Indent + 1, stack = ['when' | Stack] };
+state('->', #state{ stack = ['when' | Stack] } = State) ->
+    State#state{ stack = Stack };
+state('->', #state{ indent = Indent } = State) ->
+    State#state{ indent = Indent + 1 };
+
+state(Token, #state{ indent = Indent } = State) ->
+    State#state{ indent = Indent + indent(Token) }.
