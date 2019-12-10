@@ -2,18 +2,18 @@
 -module("include.hrl").
 
 -export([
-    fun_test/1,
-    atom_test/0,
-    case_test/1,
-    try_test/1,
-    receive_test/0,
+        fun_test/1,
+        atom_test/0,
+        case_test/1,
+        try_test/1,
+        receive_test/0,
 ]).
 
 fun_test(ok) ->
     ok;
 fun_test(X) when
-      is_atom(X)
-    ->
+    is_atom(X)
+->
     X;
 fun_test(X) ->
     X.
