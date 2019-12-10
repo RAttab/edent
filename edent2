@@ -36,13 +36,19 @@ process(Tokens, Output, State) ->
 next_line(Tokens) ->
     next_line(Tokens, []).
 
+%% The erl_scan eats a \n character if it follows a dot character BUT
+%% not if if there's a space or basically anything in between the two
+%% characters. This is basically impossible to compensate for at this
+%% point so I won't even bother.
+next_line([{dot, _} | Rest], Acc) ->
+    {lists:reverse([dot | Acc]), Rest};
 next_line([{white_space, _, Text} | Rest], Acc) ->
     case lists:splitwith(fun (C) -> C /= $\n end, Text) of
         {_, []} -> next_line(Rest, [{white_space, Text} | Acc]);
         {_, [$\n | Tail]} -> {lists:reverse(Acc), [{white_space, 0, Tail} | Rest]}
     end;
-next_line([] = Rest, Acc) ->
-    {lists:reverse(Acc), Rest};
+next_line([], Acc) ->
+    {lists:reverse(Acc), []};
 next_line([{Cat, _, Value} | Rest], Acc) ->
     next_line(Rest, [{Cat, Value} | Acc]);
 next_line([{Cat, _} | Rest], Acc) ->
@@ -126,7 +132,6 @@ indent('#{') -> +1;
 indent('{') -> +1;
 indent('}') -> -1;
 indent(';') -> -1;
-indent('.') -> -1;
 indent('<<') -> +1;
 indent('>>') -> -1;
 indent(_) -> 0.
@@ -147,15 +152,15 @@ count_head(['of' | _], _, State) ->
 
 count_head(['after' | Rest], Count, #state{ stack = ['receive' | _] } = State) ->
     count_head(Rest, Count - 1, State);
-count_head(['after' | Rest], Count, #state{ stack = [match | _] } = State) ->
-    count_head(Rest, Count - 1, State);
+count_head(['after' | Rest], Count, #state{ stack = [{match, _} | _] } = State) ->
+    count_head(Rest, Count - 2, State);
 count_head(['after' | _], _, State) ->
     throw({unmatched_after, State});
 
 count_head(['catch' | Rest], Count, #state{ stack = ['try' | _] } = State) ->
     count_head(Rest, Count - 1, State);
-count_head(['catch' | Rest], Count, #state{ stack = [match | _] } = State) ->
-    count_head(Rest, Count - 1, State);
+count_head(['catch' | Rest], Count, #state{ stack = [{match, _} | _] } = State) ->
+    count_head(Rest, Count - 2, State);
 count_head(['catch' | Rest], Count, State) ->
     count_head(Rest, Count, State);
 
@@ -164,9 +169,11 @@ count_head(['->' | Rest], Count, #state{ stack = ['when' | _] } = State) ->
 
 count_head(['end' | Rest], Count, #state{ stack = ['try' | _] } = State) ->
     count_head(Rest, Count - 1, State);
-count_head(['end' | Rest], Count, #state{ stack = [block | _] } = State) ->
+count_head(['end' | Rest], Count, #state{ stack = ['after' | _] } = State) ->
     count_head(Rest, Count - 1, State);
-count_head(['end' | Rest], Count, #state{ stack = [match | _] } = State) ->
+count_head(['end' | Rest], Count, #state{ stack = [{block, _} | _] } = State) ->
+    count_head(Rest, Count - 1, State);
+count_head(['end' | Rest], Count, #state{ stack = [{match, _} | _] } = State) ->
     count_head(Rest, Count - 2, State);
 count_head(['end' | _], _, State) ->
     throw({unmatched_end, State});
@@ -177,47 +184,66 @@ count_head([Token | Rest], Count, State) ->
         _ -> Count
     end.
 
+%% Macros just kinda ignore all the regular syntax stuff so... fuck me
+%% I guess...
+state('-', #state{ indent = 0, stack = Stack } = State) ->
+    State#state{ stack = [macro | Stack] };
 
 state('case', #state{ indent = Indent, stack = Stack } = State) ->
     State#state{ indent = Indent + 1, stack = ['case' | Stack] };
 state('try', #state{ indent = Indent, stack = Stack } = State) ->
     State#state{ indent = Indent + 1, stack = ['try' | Stack] };
 state('receive', #state{ indent = Indent, stack = Stack } = State) ->
-    State#state{ indent = Indent + 1, stack = [match | Stack] };
+    State#state{ indent = Indent + 1, stack = [{match, 'receive'} | Stack] };
 state('if', #state{ indent = Indent, stack = Stack } = State) ->
-    State#state{ indent = Indent + 1, stack = [match | Stack] };
+    State#state{ indent = Indent + 1, stack = [{match, 'if'} | Stack] };
 state('fun', #state{ indent = Indent, stack = Stack } = State) ->
-    State#state{ indent = Indent + 1, stack = [block | Stack] };
+    State#state{ indent = Indent + 1, stack = [{block, 'fun'} | Stack] };
 state('begin', #state{ indent = Indent, stack = Stack } = State) ->
-    State#state{ indent = Indent + 1, stack = [block | Stack] };
+    State#state{ indent = Indent + 1, stack = [{block, 'begin'} | Stack] };
 
 state('of', #state{ stack = ['case' | Stack] } = State) ->
-    State#state{ stack = [match | Stack] };
+    State#state{ stack = [{match, 'case'} | Stack] };
 state('of', #state{ stack = ['try' | Stack] } = State) ->
-    State#state{ stack = [match | Stack] };
+    State#state{ stack = [{match, 'try'} | Stack] };
 state('of', State) ->
     throw({unmatched_of, State});
 
 state('catch', #state{ stack = ['try' | Stack] } = State) ->
-    State#state{ stack = [match | Stack] };
-state('catch', #state{ stack = [match | Stack] } = State) ->
-    State#state{ stack = [match | Stack] };
+    State#state{ stack = [{match, 'catch'} | Stack] };
+state('catch', #state{ indent = Indent, stack = [{match, 'try'} | Stack] } = State) ->
+    State#state{ indent = Indent - 1, stack = [{match, 'catch'} | Stack] };
 state('catch', #state{ indent = Indent, stack = Stack } = State) ->
     State#state{ indent = Indent, stack = Stack };
 
-state('after', #state{ indent = Indent, stack = [match | Stack] } = State) ->
-    State#state{ indent = Indent, stack = [match | Stack] };
+state('after', #state{ indent = Indent, stack = [{match, 'try'} | Stack] } = State) ->
+    State#state{ indent = Indent - 1, stack = ['after' | Stack] };
+state('after', #state{ indent = Indent, stack = [{match, 'catch'} | Stack] } = State) ->
+    State#state{ indent = Indent - 1, stack = ['after' | Stack] };
+state('after', #state{ indent = Indent, stack = [{match, 'receive'} | Stack] } = State) ->
+    State#state{ indent = Indent - 1, stack = [{match, 'after'} | Stack] };
 state('after', State) ->
     throw({unmatched_after, State});
 
+state('end', #state{ indent = Indent, stack = ['fun' | Stack] } = State) ->
+    State#state{ indent = Indent - 1, stack = Stack };
 state('end', #state{ indent = Indent, stack = ['try' | Stack] } = State) ->
     State#state{ indent = Indent - 1, stack = Stack };
-state('end', #state{ indent = Indent, stack = [match | Stack] } = State) ->
-    State#state{ indent = Indent - 2, stack = Stack };
-state('end', #state{ indent = Indent, stack = [block | Stack] } = State) ->
+state('end', #state{ indent = Indent, stack = ['after' | Stack] } = State) ->
     State#state{ indent = Indent - 1, stack = Stack };
+state('end', #state{ indent = Indent, stack = [{block, _} | Stack] } = State) ->
+    State#state{ indent = Indent - 1, stack = Stack };
+state('end', #state{ indent = Indent, stack = [{match, _} | Stack] } = State) ->
+    State#state{ indent = Indent - 2, stack = Stack };
 state('end', State) ->
     throw({unmatched_end, State});
+
+state(dot, #state{ indent = 0, stack = [macro | Stack] } = State) ->
+    State#state{ stack = Stack };
+state(dot, #state{ indent = Indent, stack = [macro | Stack] } = State) ->
+    State#state{ indent = Indent - 1, stack = Stack };
+state(dot, #state{ indent = Indent } = State) ->
+    State#state{ indent = Indent - 1 };
 
 state('when', #state{ indent = Indent, stack = Stack } = State) ->
     State#state{ indent = Indent + 1, stack = ['when' | Stack] };
