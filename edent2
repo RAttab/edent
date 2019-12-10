@@ -33,6 +33,16 @@ process(Tokens, Output, State) ->
     process(Rest, [LineFmt | Output], StateFmt).
 
 
+%% So you can omit the body of a receive which completely changes the
+%% way you indent things so we have to detect and mark the receives
+%% with no pattern matching so we can tread it differently. WHEEEEE!
+scan_receive([{white_space, _, _} | Rest]) ->
+    scan_receive(Rest);
+scan_receive([{'after', _} | _]) ->
+    receive_nomatch;
+scan_receive(_) ->
+    'receive'.
+
 next_line(Tokens) ->
     next_line(Tokens, []).
 
@@ -42,6 +52,8 @@ next_line(Tokens) ->
 %% point so I won't even bother.
 next_line([{dot, _} | Rest], Acc) ->
     {lists:reverse([dot | Acc]), Rest};
+next_line([{'receive', _} | Rest], Acc) ->
+    next_line(Rest, [scan_receive(Rest) | Acc]);
 next_line([{white_space, _, Text} | Rest], Acc) ->
     case lists:splitwith(fun (C) -> C /= $\n end, Text) of
         {_, []} -> next_line(Rest, [{white_space, Text} | Acc]);
@@ -113,6 +125,7 @@ token_to_list({float, Value}) -> float_to_binary(Value);
 token_to_list({_, Atom}) when is_atom(Atom) -> atom_to_list(Atom);
 token_to_list({_, Text}) -> Text;
 token_to_list(dot) -> $.;
+token_to_list(receive_nomatch) -> "receive";
 token_to_list(Atom) when is_atom(Atom) -> atom_to_list(Atom).
 
 
@@ -150,6 +163,8 @@ count_head(['of' | Rest], Count, #state{ stack = ['try' | _] } = State) ->
 count_head(['of' | _], _, State) ->
     throw({unmatched_of, State});
 
+count_head(['after' | Rest], Count, #state{ stack = [receive_nomatch | _] } = State) ->
+    count_head(Rest, Count, State);
 count_head(['after' | Rest], Count, #state{ stack = ['receive' | _] } = State) ->
     count_head(Rest, Count - 1, State);
 count_head(['after' | Rest], Count, #state{ stack = [{match, _} | _] } = State) ->
@@ -195,6 +210,8 @@ state('try', #state{ indent = Indent, stack = Stack } = State) ->
     State#state{ indent = Indent + 1, stack = ['try' | Stack] };
 state('receive', #state{ indent = Indent, stack = Stack } = State) ->
     State#state{ indent = Indent + 1, stack = [{match, 'receive'} | Stack] };
+state(receive_nomatch, #state{ stack = Stack } = State) ->
+    State#state{ stack = [receive_nomatch | Stack] };
 state('if', #state{ indent = Indent, stack = Stack } = State) ->
     State#state{ indent = Indent + 1, stack = [{match, 'if'} | Stack] };
 state('fun', #state{ indent = Indent, stack = Stack } = State) ->
@@ -222,6 +239,8 @@ state('after', #state{ indent = Indent, stack = [{match, 'catch'} | Stack] } = S
     State#state{ indent = Indent - 1, stack = ['after' | Stack] };
 state('after', #state{ indent = Indent, stack = [{match, 'receive'} | Stack] } = State) ->
     State#state{ indent = Indent - 1, stack = [{match, 'after'} | Stack] };
+state('after', #state{ indent = Indent, stack = [receive_nomatch | Stack] } = State) ->
+    State#state{ indent = Indent + 1, stack = [{match, 'after'} | Stack] };
 state('after', State) ->
     throw({unmatched_after, State});
 
