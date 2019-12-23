@@ -33,6 +33,13 @@ complex_test(X) ->
 nested_test(X) ->
     case X of
         ok ->
-            case X of ok -> ok end
+            case
+                X
+            of
+                ok ->
+                    ok
+            end;
+        _ ->
+            ok
     end,
     ok.

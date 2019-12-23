@@ -142,7 +142,9 @@ indent(_) -> 0.
 
 
 line_indent(Tokens, #state{ indent = Indent} = State) ->
-    max(0, line_indent(Tokens, Indent, State)).
+    Result = max(0, line_indent(Tokens, Indent, State)),
+    erlang:display({line_indent, Result, State}),
+    Result.
 
 line_indent([], Count, _) ->
     Count;
@@ -171,6 +173,10 @@ line_indent(['catch' | Rest], _, #state{ stack = [{block, Indent, 'try'} | Stack
 
 line_indent(['->' | Rest], _, #state{ stack = [{block, Indent, 'when'} | Stack] } = State) ->
     line_indent(Rest, Indent, State#state{ stack = Stack });
+
+% Behaves differently then regular closing indent.
+line_indent([';' | Rest], Indent, State) ->
+    line_indent(Rest, Indent, State);
 
 line_indent([Token | Rest], Indent, State) ->
     case indent(Token) of

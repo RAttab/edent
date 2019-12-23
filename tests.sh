@@ -11,6 +11,10 @@ TESTS=(
     block_misc
     block_receive )
 
+if [[ $# -gt 0 ]]; then
+    TESTS=( $1 )
+fi
+
 for TEST in "${TESTS[@]}"; do
     input="$(pwd)/tests/${TEST}.erl"
     output="$(pwd)/tests/${TEST}.out.erl"
