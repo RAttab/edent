@@ -119,8 +119,7 @@ is_safe_atom('after', _) -> false;
 is_safe_atom('begin', _) -> false;
 is_safe_atom('catch', _) -> false;
 is_safe_atom('receive', _) -> false;
-is_safe_atom(_, [C | _]) when C < $a orelse C > $z ->
-    false;
+is_safe_atom(_, [C | _]) when C < $a orelse C > $z -> false;
 is_safe_atom(_, List) ->
     lists:all(fun
             (C) when C >= $a andalso C =< $z -> true;
@@ -145,7 +144,6 @@ token_to_list({float, Value}) -> float_to_binary(Value);
 token_to_list({_, Atom}) when is_atom(Atom) -> atom_to_list(Atom);
 token_to_list({_, Text}) -> Text;
 token_to_list(dot) -> $.;
-token_to_list(receive_nomatch) -> "receive";
 token_to_list(Atom) when is_atom(Atom) -> atom_to_list(Atom).
 
 

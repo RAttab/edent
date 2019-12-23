@@ -10,7 +10,8 @@ TESTS=(
     block_try
     block_case
     block_misc
-    block_receive )
+    block_receive
+    edent )
 
 if [[ $# -gt 0 ]]; then
     TESTS=( $1 )
