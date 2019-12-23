@@ -10,15 +10,16 @@ TESTS=(
     block_try
     block_receive )
 
+cd tests
+
 for TEST in "${TESTS[@]}"; do
-    input="tests/${TEST}.erl"
-    output="tests/${TEST}.out.erl"
+    input="${TEST}.erl"
+    output="${TEST}.out.erl"
 
     printf "%0.1s" ={1..100}
-    printf "\ntest: %s\ninput: %s\noutput: %s\n\n" "$TEST" "$input" "$output"
+    printf "\nTEST: %s\n\n" "$TEST"
 
     erlc "$input"
-
-    ./edent "$input" "$output"
+    ../edent "$input" "$output"
     diff "$input" "$output"
 done
