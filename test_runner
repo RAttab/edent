@@ -3,7 +3,12 @@
 set -o errexit -o nounset -o pipefail
 
 declare -a TESTS
-TESTS=( basics block_case block_try block_receive )
+TESTS=(
+    basics
+#    hell # known bad cases
+    block_case
+    block_try
+    block_receive )
 
 for TEST in "${TESTS[@]}"; do
     input="tests/${TEST}.erl"

@@ -213,15 +213,6 @@ state('after', #state{ stack = [{block, Indent, 'try'} | _] } = State) ->
 state('after', State) ->
     throw({unmatched_after, State});
 
-%% TODO: Somehow needs to disambiguate this:
-%%
-%% `try catch X catch _ -> ok end`
-%%
-%% Right now the inner catch matches against the outer try which it
-%% shouldn't but this requires contextual information (ie. use
-%% erl_parse instead of erl_scan) which we don't want to do. On the
-%% bright side, if you write shit like this you deserve everything
-%% that you get.
 state('catch', #state{ stack = [{block, Indent, 'try'} | _] } = State) ->
     State#state{ indent = Indent + 1 };
 state('catch', State) ->

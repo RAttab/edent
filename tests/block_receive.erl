@@ -9,8 +9,7 @@
 
 basic_test() ->
     receive
-        ok
-        ->
+        ok ->
             ok
     end,
     ok.
