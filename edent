@@ -72,18 +72,22 @@ format_line([Token | Rest], Output, State) ->
     format_line(Rest, [token_to_list(Token) | Output], state(Token, State)).
 
 
-%% erl_scan is really fucking stupid and instead of keeping the
-%% original [$\\, $\n] it decides to replace it by $\n at which point
-%% it's impossible to tell what the original was and we just have to
-%% make a wild guess instead.
-%%
-%% TODO: Is this even necessary? You should be using ~n syntax for
-%% formats anyway.
+%% erl_scan just kinda evaluates any escaped character so that you
+%% only have the result. This makes it impossible to know what the
+%% original string/char was so we just kinda escape everything and
+%% hope nobody notices... wheeeee!
+escape($\b) -> [$\\, $b];
+escape($\d) -> [$\\, $d];
 escape($\e) -> [$\\, $e];
 escape($\f) -> [$\\, $f];
 escape($\n) -> [$\\, $n];
-escape($\r) -> [$\\, $n];
+escape($\r) -> [$\\, $r];
+escape($\s) -> [$\\, $s];
+escape($\t) -> [$\\, $t];
 escape($\v) -> [$\\, $v];
+escape($\') -> [$\\, $\'];
+escape($\") -> [$\\, $\"];
+escape($\\) -> [$\\, $\\];
 escape(C) -> C.
 
 escape([], Acc) -> lists:reverse(Acc);
@@ -106,7 +110,7 @@ quoted_atom_to_list(Atom) ->
     end.
 
 
-token_to_list({char, Char}) -> [$$, Char];
+token_to_list({char, Char}) -> [$$, escape(Char)];
 token_to_list({atom, Atom}) -> quoted_atom_to_list(Atom);
 token_to_list({string, Value}) -> [$\", escape(Value, []), $\"];
 token_to_list({integer, Value}) -> integer_to_binary(Value);
@@ -176,6 +180,8 @@ line_indent(['->' | Rest], _, #state{ stack = [{block, Indent, 'when'} | Stack] 
 
 % Behaves differently then regular closing indent.
 line_indent([';' | Rest], Indent, State) ->
+    line_indent(Rest, Indent, State);
+line_indent([dot | Rest], Indent, State) ->
     line_indent(Rest, Indent, State);
 
 line_indent([Token | Rest], Indent, State) ->

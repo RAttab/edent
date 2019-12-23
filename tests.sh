@@ -6,6 +6,7 @@ declare -a TESTS
 TESTS=(
     basics
 #    hell # known bad cases
+    escape
     block_try
     block_case
     block_misc
@@ -22,7 +23,9 @@ for TEST in "${TESTS[@]}"; do
     printf "%0.1s" ={1..100}
     printf "\nTEST: %s\n\n" "$TEST"
 
-    (cd /tmp && erlc "$input")
+    if [[ "$TEST" != "edent" ]]; then
+        (cd /tmp && erlc "$input")
+    fi
 
     ./edent "$input" "$output"
     diff "$input" "$output"
