@@ -7,7 +7,12 @@
 ]).
 
 basic_test(X) ->
-    case X of ok -> ok end,
+    case
+        X
+    of
+        ok ->
+            ok
+    end,
     ok.
 
 complex_test(X) ->

@@ -6,8 +6,9 @@ declare -a TESTS
 TESTS=(
     basics
 #    hell # known bad cases
-    block_case
+    block_if
     block_try
+    block_case
     block_receive )
 
 cd tests
