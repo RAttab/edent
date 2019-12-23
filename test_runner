@@ -1,0 +1,14 @@
+#! /usr/bin/env bash
+
+set -o errexit -o nounset -o pipefail
+
+declare -a TESTS
+TESTS=( basics )
+
+for TEST in "${TESTS[@]}"; do
+
+    printf '\n[ test: %s ]\n================================================================================\n' $TEST
+    
+    ./edent "tests/${TEST}.erl" "tests/${TEST}.out.erl"
+    diff "tests/${TEST}.erl" "tests/${TEST}.out.erl"
+done

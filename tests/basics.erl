@@ -6,7 +6,7 @@
         atom_test/0,
         case_test/1,
         try_test/1,
-        receive_test/0,
+        receive_test/0
 ]).
 
 fun_test(ok) ->
