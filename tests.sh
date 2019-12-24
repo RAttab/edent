@@ -11,6 +11,7 @@ TESTS=(
     block_try
     block_case
     block_misc
+    block_lambda
     block_receive
     edent )
 
