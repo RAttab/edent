@@ -4,7 +4,7 @@
         basic_test/1,
         complex_test/1,
         nested_test/1
-]).
+    ]).
 
 basic_test(X) ->
     case

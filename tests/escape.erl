@@ -12,7 +12,7 @@
 -export([
         literal/0,
         string/0
-]).
+    ]).
 
 literal() ->
     [

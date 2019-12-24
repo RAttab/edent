@@ -15,7 +15,7 @@ main(_) ->
 -record(state, {
         indent = 0 :: pos_integer(),
         stack = [] :: list(atom())
-}).
+    }).
 
 
 process(Tokens) ->
@@ -60,8 +60,8 @@ format_line(Line, State) ->
     case lists:reverse(trim(lists:reverse(trim(Line)))) of
         [] ->
             {[$\n], State};
-        Trimmed ->
-            LineIndent = line_indent(Trimmed, State),
+        [Token | _ ] = Trimmed ->
+            LineIndent = line_indent(Token, State),
             format_line(Trimmed, [lists:duplicate(LineIndent * 4, $\s)], State)
     end.
 
@@ -170,50 +170,39 @@ indent(dot) -> -1;
 indent(_) -> 0.
 
 
-line_indent(Tokens, #state{ indent = Indent} = State) ->
-    Result = max(0, line_indent(Tokens, Indent, State)),
-    erlang:display({line_indent, Result, State}),
-    Result.
+line_indent('catch', #state{ stack = [{block, Indent, 'try'} | _] }) ->
+    Indent;
+line_indent('->', #state{ stack = [{block, Indent, 'when'} | _] }) ->
+    Indent;
 
-line_indent([], Count, _) ->
-    Count;
-
-line_indent(['of' | Rest], _, #state{ stack = [{block, Indent, 'case'} | Stack] } = State) ->
-    line_indent(Rest, Indent, State#state{ stack = Stack });
-line_indent(['of' | Rest], _, #state{ stack = [{block, Indent, 'try'} | Stack] } = State) ->
-    line_indent(Rest, Indent, State#state{ stack = Stack });
-line_indent(['of' | _], _, State) ->
+line_indent('of', #state{ stack = [{block, Indent, 'case'} | _] }) ->
+    Indent;
+line_indent('of', #state{ stack = [{block, Indent, 'try'} | _] }) ->
+    Indent;
+line_indent('of', State) ->
     throw({unmatched_of, State});
 
-line_indent(['after' | Rest], _, #state{ stack = [{block, Indent, 'receive'} | Stack] } = State) ->
-    line_indent(Rest, Indent, State#state{ stack = Stack });
-line_indent(['after' | Rest], _, #state{ stack = [{block, Indent, 'try'} | Stack] } = State) ->
-    line_indent(Rest, Indent, State#state{ stack = Stack });
-line_indent(['after' | _], _, State) ->
+line_indent('after', #state{ stack = [{block, Indent, 'receive'} | _] }) ->
+    Indent;
+line_indent('after', #state{ stack = [{block, Indent, 'try'} | _] }) ->
+    Indent;
+line_indent('after', State) ->
     throw({unmatched_after, State});
 
-line_indent(['end' | Rest], _, #state{ stack = [{block, Indent, _} | Stack] } = State) ->
-    line_indent(Rest, Indent, State#state{ stack = Stack });
-line_indent(['end' | _], _, State) ->
+line_indent('end', #state{ stack = [{block, Indent, _} | _] }) ->
+    Indent;
+line_indent('end', State) ->
     throw({unmatched_end, State});
 
-line_indent(['catch' | Rest], _, #state{ stack = [{block, Indent, 'try'} | Stack] } = State) ->
-    line_indent(Rest, Indent, State#state{ stack = Stack });
+% We expect a different behaviour from these two then other regular
+% closing indent.
+line_indent(';', #state{ indent = Indent }) ->
+    Indent;
+line_indent(dot, #state{ indent = Indent }) ->
+    Indent;
 
-line_indent(['->' | Rest], _, #state{ stack = [{block, Indent, 'when'} | Stack] } = State) ->
-    line_indent(Rest, Indent, State#state{ stack = Stack });
-
-% Behaves differently then regular closing indent.
-line_indent([';' | Rest], Indent, State) ->
-    line_indent(Rest, Indent, State);
-line_indent([dot | Rest], Indent, State) ->
-    line_indent(Rest, Indent, State);
-
-line_indent([Token | Rest], Indent, State) ->
-    case indent(Token) of
-        -1 -> line_indent(Rest, Indent - 1, State);
-        _ -> Indent
-    end.
+line_indent(Token, #state{ indent = Indent }) ->
+    max(0, case indent(Token) of -1 -> Indent - 1; _ -> Indent end).
 
 
 %% Macros just kinda ignore all the regular syntax stuff so... fuck

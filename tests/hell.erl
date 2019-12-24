@@ -2,7 +2,7 @@
 
 -export([
         nested_catch_expr_test/1
-]).
+    ]).
 
 
 %% TODO: Right now the inner catch matches against the outer try which

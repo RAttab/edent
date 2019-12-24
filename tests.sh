@@ -7,6 +7,7 @@ TESTS=(
     basics
 #    hell # known bad cases
     escape
+    block_fun
     block_try
     block_case
     block_misc

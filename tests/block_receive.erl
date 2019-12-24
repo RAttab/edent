@@ -5,7 +5,7 @@
         match_test/0,
         after_test/0,
         complex_test/0
-]).
+    ]).
 
 basic_test() ->
     receive

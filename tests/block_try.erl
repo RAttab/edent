@@ -4,7 +4,7 @@
         expr_test/1,
         catch_test/1,
         complex_test/1
-]).
+    ]).
 
 
 expr_test(X) ->

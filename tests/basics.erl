@@ -4,7 +4,7 @@
 -export([
         fun_test/1,
         atom_test/0
-]).
+    ]).
 
 fun_test(ok) ->
     ok;

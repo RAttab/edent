@@ -5,7 +5,7 @@
         begin_nested_test/0,
         if_test/1,
         if_nested_test/1
-]).
+    ]).
 
 begin_test() ->
     begin
