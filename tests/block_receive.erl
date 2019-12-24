@@ -9,20 +9,26 @@
 
 basic_test() ->
     receive
-        ok ->
+        ok
+        ->
             ok
     end,
     ok.
 
 match_test() ->
     receive
-        ok ->
-            ok;
-        X when
+        ok
+        ->
+            ok
+            ;
+        X
+        when
             is_atom(X)
         ->
-            X;
-        _ ->
+            X
+            ;
+        _
+        ->
             ok
     end,
     ok.
@@ -30,23 +36,30 @@ match_test() ->
 after_test() ->
     receive
     after
-        10 ->
+        10
+        ->
             ok
     end,
     ok.
 
 complex_test() ->
     receive
-        ok ->
-            ok;
-        X when
+        ok
+        ->
+            ok
+            ;
+        X
+        when
             is_atom(X)
         ->
-            X;
-        _ ->
+            X
+            ;
+        _
+        ->
             ok
     after
-        10 ->
+        10
+        ->
             ok
     end,
     ok.

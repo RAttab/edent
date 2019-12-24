@@ -8,25 +8,33 @@
     ]).
 
 basic_test() ->
-    fun () ->
+    fun
+        ()
+        ->
             ok
     end.
 
 multi_test() ->
     fun
-        (ok) ->
-            ok;
-        (_) ->
+        (ok)
+        ->
+            ok
+            ;
+        (_)
+        ->
             ok
     end.
 
 when_test() ->
-    fun (X)
+    fun
+        (X)
         when
             is_atom(X)
         ->
-            ok;
-        (_) ->
+            ok
+            ;
+        (_)
+        ->
             ok
     end.
 
@@ -42,7 +50,8 @@ param_test() ->
             }
         )
         ->
-            ok;
+            ok
+            ;
         (
             _X,
             {

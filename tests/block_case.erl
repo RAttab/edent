@@ -10,7 +10,8 @@ basic_test(X) ->
     case
         X
     of
-        ok ->
+        ok
+        ->
             ok
     end,
     ok.
@@ -19,13 +20,18 @@ complex_test(X) ->
     case
         X
     of
-        ok ->
-            ok;
-        X when
+        ok
+        ->
+            ok
+            ;
+        X
+        when
             is_atom(X)
         ->
-            X;
-        _ ->
+            X
+            ;
+        _
+        ->
             X
     end,
     ok.
@@ -36,10 +42,13 @@ nested_test(X) ->
             case
                 X
             of
-                ok ->
+                ok
+                ->
                     ok
-            end;
-        _ ->
+            end
+            ;
+        _
+        ->
             ok
     end,
     ok.

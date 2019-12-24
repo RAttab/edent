@@ -7,19 +7,26 @@
         param_test/2
     ]).
 
-basic_test() ->
-    ok.
+basic_test()
+->
+    ok
+    .
 
-multi_test(ok) ->
-    ok;
-multi_test(_) ->
-    ok.
+multi_test(ok)
+->
+    ok
+    ;
+multi_test(_)
+->
+    ok
+    .
 
 when_test(X)
 when
     is_atom(X)
 ->
-    ok.
+    ok
+    .
 
 param_test(
     ok,
@@ -29,13 +36,17 @@ param_test(
             _Z
         }
     }
-) ->
-    ok;
+)
+->
+    ok
+    ;
 param_test(
     _X,
     {
         _Y,
         {
             _Z
-        }}) ->
-    ok.
+        }})
+->
+    ok
+    .

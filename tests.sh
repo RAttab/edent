@@ -5,7 +5,9 @@ set -o errexit -o nounset -o pipefail
 declare -a TESTS
 TESTS=(
     basics
-#    hell # known bad cases
+    # hell # known bad cases
+    expr
+    macro
     escape
     block_fun
     block_try

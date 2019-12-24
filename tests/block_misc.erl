@@ -23,23 +23,32 @@ begin_nested_test() ->
 
 if_test(X) ->
     if
-        X ->
-            ok;
-        true ->
+        X
+        ->
+            ok
+            ;
+        true
+        ->
             ok
     end,
     ok.
 
 if_nested_test(X) ->
     if
-        X ->
+        X
+        ->
             if
-                X ->
-                    ok;
-                true ->
+                X
+                ->
                     ok
-            end;
-        true ->
+                    ;
+                true
+                ->
+                    ok
+            end
+            ;
+        true
+        ->
             ok
     end,
     ok.
