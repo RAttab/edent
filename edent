@@ -228,6 +228,7 @@ line_indent(_, #state{ indent = Indent }) ->
     Indent.
 
 
+%% Denominates a macro
 state('-', #state{ indent = 0, stack = Stack } = State) ->
     State#state{ stack = [macro | Stack] };
 
