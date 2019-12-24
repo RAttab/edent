@@ -11,7 +11,12 @@
 
 -type type_basic() :: #rec_basic{}.
 
--spec spec_basics(type_basic(), term()) -> ok | error.
+-spec spec_basics(
+    type_basic(),
+    term())
+->
+    ok |
+    error.
 
 spec_basics(_, _) ->
     ok.

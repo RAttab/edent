@@ -71,7 +71,8 @@ format_line([], Output, State) ->
     {lists:reverse([$\n | Output]), State};
 format_line([Token | Rest], Output, State) ->
     erlang:display({token, Token, state(Token, State)}),
-    format_line(Rest, [token_to_list(Token) | Output], state(Token, State)).
+    Result = format_line(Rest, [token_to_list(Token) | Output], state(Token, State)),
+    Result.
 
 
 %% erl_scan just removes all escape sequence so we can't rebuild the
@@ -157,24 +158,31 @@ trim(Tokens) ->
     Tokens.
 
 
-indent('(') -> +1;
-indent(')') -> -1;
-indent('[') -> +1;
-indent(']') -> -1;
-indent('#{') -> +1;
-indent('{') -> +1;
-indent('}') -> -1;
-indent(';') -> -1;
-indent('<<') -> +1;
-indent('>>') -> -1;
-indent('->') -> +1;
-indent(dot) -> -1;
-indent(_) -> 0.
-
-
 line_indent(Token, #state{ stack = [{expr, _} | Stack] } = State) ->
     line_indent(Token, State#state{ stack = Stack });
 
+line_indent(')', #state{ stack = [{'(', Indent} | _] }) ->
+    Indent;
+line_indent(')' = Token, State) ->
+    throw({unmatched, Token, State});
+
+line_indent('}', #state{ stack = [{'{', Indent} | _] }) ->
+    Indent;
+line_indent('}' = Token, State) ->
+    throw({unmatched, Token, State});
+
+line_indent(']', #state{ stack = [{'[', Indent} | _] }) ->
+    Indent;
+line_indent(']' = Token, State) ->
+    throw({unmatched, Token, State});
+
+line_indent('>>', #state{ stack = [{'<<', Indent} | _] }) ->
+    Indent;
+line_indent('>>' = Token, State) ->
+    throw({unmatched, Token, State});
+
+line_indent('=>', #state{ stack = [{'{', Indent} | _] }) ->
+    Indent + 1;
 line_indent('->', #state{ stack = [{block, Indent, 'if'} | _] }) ->
     Indent + 1;
 line_indent('->', #state{ stack = [{block, Indent, 'try'} | _] }) ->
@@ -194,20 +202,20 @@ line_indent('of', #state{ stack = [{block, Indent, 'case'} | _] }) ->
     Indent;
 line_indent('of', #state{ stack = [{block, Indent, 'try'} | _] }) ->
     Indent;
-line_indent('of', State) ->
-    throw({unmatched_of, State});
+line_indent('of' = Token, State) ->
+    throw({unmatched, Token, State});
 
 line_indent('after', #state{ stack = [{block, Indent, 'receive'} | _] }) ->
     Indent;
 line_indent('after', #state{ stack = [{block, Indent, 'try'} | _] }) ->
     Indent;
-line_indent('after', State) ->
-    throw({unmatched_after, State});
+line_indent('after'= Token, State) ->
+    throw({unmatched, Token, State});
 
 line_indent('end', #state{ stack = [{block, Indent, _} | _] }) ->
     Indent;
-line_indent('end', State) ->
-    throw({unmatched_end, State});
+line_indent('end' = Token, State) ->
+    throw({unmatched, Token, State});
 
 % We expect a different behaviour from these two then other regular
 % closing indent.
@@ -216,8 +224,8 @@ line_indent(';', #state{ indent = Indent }) ->
 line_indent(dot, #state{ indent = Indent }) ->
     Indent;
 
-line_indent(Token, #state{ indent = Indent }) ->
-    max(0, case indent(Token) of -1 -> Indent - 1; _ -> Indent end).
+line_indent(_, #state{ indent = Indent }) ->
+    Indent.
 
 
 state('=', #state{ indent = Indent, stack = [{expr, _} | _] } = State) ->
@@ -243,6 +251,8 @@ state('::' = Token, #state { stack = [{expr, Indent} | Stack] } = State) ->
     state(Token, State#state{ indent = Indent, stack = Stack});
 state('->' = Token, #state { stack = [{expr, Indent} | Stack] } = State) ->
     state(Token, State#state{ indent = Indent, stack = Stack});
+state('=>' = Token, #state { stack = [{expr, Indent} | Stack] } = State) ->
+    state(Token, State#state{ indent = Indent, stack = Stack});
 state('of' = Token, #state { stack = [{expr, Indent} | Stack] } = State) ->
     state(Token, State#state{ indent = Indent, stack = Stack});
 state('end' = Token, #state { stack = [{expr, Indent} | Stack] } = State) ->
@@ -259,13 +269,6 @@ state(')', #state{ stack = [{'(', Indent} | Stack] } = State ) ->
 state(')' = Token, State) ->
     throw({unmatched, Token, State});
 
-state('{' = Token, #state{ indent = Indent, stack = Stack } = State) ->
-    State#state{ indent = Indent + 1, stack = [{Token, Indent} | Stack] };
-state('}', #state{ stack = [{'{', Indent} | Stack] } = State ) ->
-    State#state{ indent = Indent, stack = Stack };
-state('}' = Token, State) ->
-    throw({unmatched, Token, State});
-
 state('[' = Token, #state{ indent = Indent, stack = Stack } = State) ->
     State#state{ indent = Indent + 1, stack = [{Token, Indent} | Stack] };
 state(']', #state{ stack = [{'[', Indent} | Stack] } = State ) ->
@@ -279,6 +282,27 @@ state('>>', #state{ stack = [{'<<', Indent} | Stack] } = State ) ->
     State#state{ indent = Indent, stack = Stack };
 state('>>' = Token, State) ->
     throw({unmatched, Token, State});
+
+state('{' = Token, #state{ indent = Indent, stack = Stack } = State) ->
+    State#state{ indent = Indent + 1, stack = [{Token, Indent} | Stack] };
+state('}', #state{ stack = [{'{', Indent} | Stack] } = State ) ->
+    State#state{ indent = Indent, stack = Stack };
+state('}' = Token, State) ->
+    throw({unmatched, Token, State});
+
+state('=>', #state{ stack = [{'{', Indent} | _] } = State) ->
+    State#state{ indent = Indent + 2 };
+state('=>' = Token, State) ->
+    throw({unmatched, Token, State});
+
+state(',', #state { stack = [{'(', Indent} | _] } = State) ->
+    State#state{ indent = Indent + 1 };
+state(',', #state { stack = [{'{', Indent} | _] } = State) ->
+    State#state{ indent = Indent + 1 };
+state(',', #state { stack = [{'[', Indent} | _] } = State) ->
+    State#state{ indent = Indent + 1 };
+state(',', #state { stack = [{'<<', Indent} | _] } = State) ->
+    State#state{ indent = Indent + 1 };
 
 state('if' = Token, #state{ indent = Indent, stack = Stack } = State) ->
     State#state{ indent = Indent + 1, stack = [{block, Indent, Token} | Stack] };
@@ -302,15 +326,15 @@ state('of', #state{ stack = [{block, Indent, 'case'} | _]} = State) ->
     State#state{ indent = Indent + 1};
 state('of', #state{ stack = [{block, Indent, 'try'} | _]} = State) ->
     State#state{ indent = Indent + 1};
-state('of', State) ->
-    throw({unmatched_of, State});
+state('of' = Token, State) ->
+    throw({unmatched, Token, State});
 
 state('after', #state{ stack = [{block, Indent, 'receive'} | _] } = State) ->
     State#state{ indent = Indent + 1 };
 state('after', #state{ stack = [{block, Indent, 'try'} | _] } = State) ->
     State#state{ indent = Indent + 1 };
-state('after', State) ->
-    throw({unmatched_after, State});
+state('after' = Token, State) ->
+    throw({unmatched, Token, State});
 
 state('catch', #state{ stack = [{block, Indent, 'try'} | _] } = State) ->
     State#state{ indent = Indent + 1 };
@@ -319,8 +343,8 @@ state('catch', State) ->
 
 state('end', #state{ stack = [{block, Indent, _} | Stack] } = State) ->
     State#state{ indent = Indent, stack = Stack };
-state('end', State) ->
-    throw({unmatched_end, State});
+state('end' = Token, State) ->
+    throw({unmatched, Token, State});
 
 %% Macros just kinda ignore all the regular syntax stuff so... meh.
 state('-', #state{ indent = 0, stack = Stack } = State) ->
@@ -330,10 +354,30 @@ state(dot, #state{ indent = 0, stack = [macro | Stack] } = State) ->
 state(dot, #state{ indent = Indent, stack = [macro | Stack] } = State) ->
     State#state{ indent = Indent - 1, stack = Stack };
 
-state('->', #state{ stack = [{block, Indent, 'fun'}] } = State) ->
-    State#state{ indent = Indent + 2 };
+state('->', #state{ stack = [{block, Indent, 'when'}] } = State) ->
+    State#state{ indent = Indent + 1, stack = [{block, 0, top}] };
 state('->', #state{ stack = [{block, Indent, 'when'} | Stack] } = State) ->
     State#state{ indent = Indent + 1, stack = Stack };
+state('->', #state{ stack = [{block, Indent, _} | _] } = State) ->
+    State#state{ indent = Indent + 2 };
+state('->', #state{ indent = 0, stack = [] } = State) ->
+    State#state{ indent = 1, stack = [{block, 0, top}] };
+state('->', #state{ indent = 0, stack = [macro] } = State) ->
+    State#state{ indent = 1 };
+state('->' = Token, State) ->
+    throw({malformed, Token, State});
 
-state(Token, #state{ indent = Indent } = State) ->
-    State#state{ indent = Indent + indent(Token) }.
+state(';', #state{ stack = [{block, Indent, top}] } = State) ->
+    State#state{ indent = Indent, stack = [] };
+state(';', #state{ stack = [{block, Indent, _} | _] } = State) ->
+    State#state{ indent = Indent + 1 };
+state(';' = Token, State) ->
+    throw({unmatched, Token, State});
+
+state(dot, #state{ stack = [{block, Indent, top} | Stack] } = State ) ->
+    State#state{ indent = Indent, stack = Stack };
+state(dot = Token, State) ->
+    throw({unmatched, Token, State});
+
+state(_, State) ->
+    State.

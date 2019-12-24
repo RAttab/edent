@@ -6,15 +6,19 @@ declare -a TESTS
 TESTS=(
     basics
     # hell # known bad cases
+
+    map
     expr
     macro
     escape
+
     block_fun
     block_try
     block_case
     block_misc
     block_lambda
     block_receive
+
     edent )
 
 if [[ $# -gt 0 ]]; then
