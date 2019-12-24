@@ -24,7 +24,7 @@ process(Tokens) ->
 process([], Output, _) ->
     lists:reverse(Output);
 process(Tokens, Output, State) ->
-    erlang:display('------------------------'),
+    erlang:display('-------------------------------------------------------'),
     {Line, Rest} = next_line(Tokens),
     erlang:display({line, State, Line}),
     {LineFmt, StateFmt} = format_line(Line, State),
@@ -39,8 +39,10 @@ next_line(Tokens) ->
 
 %% The erl_scan eats a \n character if it follows a dot character BUT
 %% not if if there's a space or basically anything in between the two
-%% characters. This is basically impossible to compensate for at this
-%% point so I won't even bother. Clean up your trailing spaces folks...
+%% characters.
+%%
+%% TODO: The only way to fix this is to remove all trailing spaces
+%% before sending the text to erl_scan.
 next_line([{dot, _} | Rest], Acc) ->
     {lists:reverse([dot | Acc]), Rest};
 next_line([{white_space, _, Text} | Rest], Acc) ->
@@ -207,11 +209,6 @@ line_indent(Token, #state{ indent = Indent }) ->
     max(0, case indent(Token) of -1 -> Indent - 1; _ -> Indent end).
 
 
-%% Macros just kinda ignore all the regular syntax stuff so... fuck
-%% me  I guess...
-state('-', #state{ indent = 0, stack = Stack } = State) ->
-    State#state{ stack = [macro | Stack] };
-
 state('if' = Token, #state{ indent = Indent, stack = Stack } = State) ->
     State#state{ indent = Indent + 1, stack = [{block, Indent, Token} | Stack] };
 state('fun' = Token, #state{ indent = Indent, stack = Stack } = State) ->
@@ -263,6 +260,10 @@ state('->', #state{ stack = [{block, Indent, 'fun'}] } = State) ->
     State#state{ indent = Indent + 2 };
 state('->', #state{ stack = [{block, Indent, 'when'} | Stack] } = State) ->
     State#state{ indent = Indent + 1, stack = Stack };
+
+%% Macros just kinda ignore all the regular syntax stuff so... meh.
+state('-', #state{ indent = 0, stack = Stack } = State) ->
+    State#state{ stack = [macro | Stack] };
 
 state(Token, #state{ indent = Indent } = State) ->
     State#state{ indent = Indent + indent(Token) }.
