@@ -4,13 +4,25 @@
 
 main([Input, Output | _ ]) ->
     {ok, Data} = file:read_file(Input),
-    {ok, Tokens, _} = erl_scan:string(binary_to_list(Data), 0, [return]),
-    ok = file:write_file(Output, process(Tokens)),
+    {Body, Header} = escript_fix(Data),
+    {ok, Tokens, _} = erl_scan:string(binary_to_list(Body), 0, [return]),
+    ok = file:write_file(Output, [Header, process(Tokens)]),
     halt(0);
 main(_) ->
     io:fwrite(standard_error, "usage: edent <input> <output>~n", []),
     halt(1).
 
+skip_line(<<$\n, Rest/binary>>, Acc) ->
+    {Rest, lists:reverse([$\n | Acc])};
+skip_line(<<C, Rest/binary>>, Acc) ->
+    skip_line(Rest, [C | Acc]);
+skip_line(<<>>, Acc) ->
+    {<<>>, lists:reverse(Acc)}.
+
+escript_fix(<<$#, $!, Rest/binary>>) ->
+    skip_line(Rest, [$!, $#]);
+escript_fix(Bin) ->
+    Bin.
 
 -record(state, {
         indent = 0 :: pos_integer(),
@@ -189,6 +201,10 @@ line_indent('<-', #state{ stack = [{'[', Indent} | _] }) ->
     Indent + 1;
 line_indent('=>', #state{ stack = [{'{', Indent} | _] }) ->
     Indent + 1;
+line_indent('::', #state{ stack = [{'(', Indent} | _] }) ->
+    Indent + 1;
+line_indent('::', #state{ stack = [{'{', Indent} | _] }) ->
+    Indent + 1;
 line_indent('->', #state{ stack = [{block, Indent, 'if'} | _] }) ->
     Indent + 1;
 line_indent('->', #state{ stack = [{block, Indent, 'try'} | _] }) ->
@@ -238,21 +254,6 @@ line_indent(_, #state{ indent = Indent }) ->
 state('-', #state{ indent = 0, stack = Stack } = State) ->
     State#state{ stack = [macro | Stack] };
 
-state('=', #state{ indent = Indent, stack = [{expr, _} | _] } = State) ->
-    State#state{ indent = Indent + 1 };
-state('=', #state{ indent = Indent, stack = Stack } = State) ->
-    State#state{ indent = Indent + 1, stack = [{expr, Indent} | Stack] };
-
-state('<-', #state{ indent = Indent, stack = [{expr, _} | _] } = State) ->
-    State#state{ indent = Indent + 1 };
-state('<-', #state{ indent = Indent, stack = Stack } = State) ->
-    State#state{ indent = Indent + 1, stack = [{expr, Indent} | Stack] };
-
-state('!', #state{ indent = Indent, stack = [{expr, _} | _] } = State) ->
-    State#state{ indent = Indent + 1 };
-state('!', #state{ indent = Indent, stack = Stack } = State) ->
-    State#state{ indent = Indent + 1, stack = [{expr, Indent} | Stack] };
-
 state(dot = Token, #state { stack = [{expr, Indent} | Stack] } = State) ->
     state(Token, State#state{ indent = Indent, stack = Stack});
 state('|' = Token, #state { stack = [{expr, Indent} | Stack] } = State) ->
@@ -287,6 +288,28 @@ state('after' = Token, #state { stack = [{expr, Indent} | Stack] } = State) ->
     state(Token, State#state{ indent = Indent, stack = Stack});
 state('catch' = Token, #state { stack = [{expr, Indent} | Stack] } = State) ->
     state(Token, State#state{ indent = Indent, stack = Stack});
+
+state('=', #state{ indent = Indent, stack = [{expr, _} | _] } = State) ->
+    State#state{ indent = Indent + 1 };
+state('=', #state{ indent = Indent, stack = Stack } = State) ->
+    State#state{ indent = Indent + 1, stack = [{expr, Indent} | Stack] };
+
+state('<-', #state{ indent = Indent, stack = [{expr, _} | _] } = State) ->
+    State#state{ indent = Indent + 1 };
+state('<-', #state{ indent = Indent, stack = Stack } = State) ->
+    State#state{ indent = Indent + 1, stack = [{expr, Indent} | Stack] };
+
+state('!', #state{ indent = Indent, stack = [{expr, _} | _] } = State) ->
+    State#state{ indent = Indent + 1 };
+state('!', #state{ indent = Indent, stack = Stack } = State) ->
+    State#state{ indent = Indent + 1, stack = [{expr, Indent} | Stack] };
+
+state('::', #state{ indent = Indent, stack = [macro] } = State) ->
+    State#state{ indent = Indent + 1 };
+state('::', #state{ indent = Indent, stack = [{expr, _} | _] } = State) ->
+    State#state{ indent = Indent + 1 };
+state('::', #state{ indent = Indent, stack = Stack } = State) ->
+    State#state{ indent = Indent + 1, stack = [{expr, Indent} | Stack] };
 
 state('(' = Token, #state{ indent = Indent, stack = Stack } = State) ->
     State#state{ indent = Indent + 1, stack = [{Token, Indent} | Stack] };

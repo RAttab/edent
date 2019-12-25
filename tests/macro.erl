@@ -1,22 +1,46 @@
 -module(macro).
 
 -export([
-        spec_basics/2
+        spec_test/2
     ]).
 
--record(rec_basic, {
-        a = {} :: any(),
-        b = [] :: any()
+-record(record_test, {
+        a,
+        b
+        =
+            ok,
+        c
+        ::
+            any(),
+        d
+        =
+            ok
+        ::
+            any(),
+        e
     }).
 
--type type_basic() :: #rec_basic{}.
+-type type_test()
+::
+    [
+        #record_test{}
+    ]
+    |
+    ok
+    .
 
--spec spec_basics(
-    type_basic(),
-    term())
+-spec spec_test(
+    any()
+    |
+    ok,
+    Name
+    ::
+        type_test()
+)
 ->
-    ok |
+    ok
+    |
     error.
 
-spec_basics(_, _) ->
+spec_test(_, _) ->
     ok.
