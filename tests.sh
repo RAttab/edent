@@ -8,6 +8,7 @@ TESTS=(
     # hell # known bad cases
 
     map
+    list
     expr
     macro
     escape

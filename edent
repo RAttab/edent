@@ -181,6 +181,12 @@ line_indent('>>', #state{ stack = [{'<<', Indent} | _] }) ->
 line_indent('>>' = Token, State) ->
     throw({unmatched, Token, State});
 
+line_indent('|', #state{ stack = [{'[', Indent} | _] }) ->
+    Indent;
+line_indent('||', #state{ stack = [{'[', Indent} | _] }) ->
+    Indent;
+line_indent('<-', #state{ stack = [{'[', Indent} | _] }) ->
+    Indent + 1;
 line_indent('=>', #state{ stack = [{'{', Indent} | _] }) ->
     Indent + 1;
 line_indent('->', #state{ stack = [{block, Indent, 'if'} | _] }) ->
@@ -237,7 +243,14 @@ state('=', #state{ indent = Indent, stack = [{expr, _} | _] } = State) ->
 state('=', #state{ indent = Indent, stack = Stack } = State) ->
     State#state{ indent = Indent + 1, stack = [{expr, Indent} | Stack] };
 
+state('<-', #state{ indent = Indent, stack = [{expr, _} | _] } = State) ->
+    State#state{ indent = Indent + 1 };
+state('<-', #state{ indent = Indent, stack = Stack } = State) ->
+    State#state{ indent = Indent + 1, stack = [{expr, Indent} | Stack] };
+
 state(dot = Token, #state { stack = [{expr, Indent} | Stack] } = State) ->
+    state(Token, State#state{ indent = Indent, stack = Stack});
+state('|' = Token, #state { stack = [{expr, Indent} | Stack] } = State) ->
     state(Token, State#state{ indent = Indent, stack = Stack});
 state(';' = Token, #state { stack = [{expr, Indent} | Stack] } = State) ->
     state(Token, State#state{ indent = Indent, stack = Stack});
@@ -252,6 +265,10 @@ state(']' = Token, #state { stack = [{expr, Indent} | Stack] } = State) ->
 state('>>' = Token, #state { stack = [{expr, Indent} | Stack] } = State) ->
     state(Token, State#state{ indent = Indent, stack = Stack});
 state('::' = Token, #state { stack = [{expr, Indent} | Stack] } = State) ->
+    state(Token, State#state{ indent = Indent, stack = Stack});
+state('||' = Token, #state { stack = [{expr, Indent} | Stack] } = State) ->
+    state(Token, State#state{ indent = Indent, stack = Stack});
+state('<-' = Token, #state { stack = [{expr, Indent} | Stack] } = State) ->
     state(Token, State#state{ indent = Indent, stack = Stack});
 state('->' = Token, #state { stack = [{expr, Indent} | Stack] } = State) ->
     state(Token, State#state{ indent = Indent, stack = Stack});
@@ -348,6 +365,13 @@ state('->', #state{ indent = 0, stack = [macro] } = State) ->
     State#state{ indent = 1 };
 state('->' = Token, State) ->
     throw({malformed, Token, State});
+
+state('|', #state{ stack = [{'[', Indent}] } = State) ->
+    State#state{ indent = Indent + 1 };
+state('||', #state{ stack = [{'[', Indent}] } = State) ->
+    State#state{ indent = Indent + 1 };
+state('<-', #state{ stack = [{'[', Indent}] } = State) ->
+    State#state{ indent = Indent + 2 };
 
 state('=>', #state{ stack = [{'{', Indent} | _] } = State) ->
     State#state{ indent = Indent + 2 };
