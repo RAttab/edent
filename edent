@@ -2,9 +2,10 @@
 %% -*- erlang -*-
 %%! -sname edent debug verbose
 
+
 main(["-o", Output, Input]) ->
     indent(Input, Output);
-main(Inputs) ->
+main(Inputs) when length(Inputs) > 0->
     [indent(Input, Input) || Input <- Inputs];
 main(_) ->
     io:fwrite(standard_error,
@@ -14,6 +15,7 @@ main(_) ->
 
 
 indent(Input, Output) ->
+    erlang:display({indent, Input, Output}),
     {ok, Data} = file:read_file(Input),
     {Body, Header} = escript_fix(Data),
     {ok, Tokens, _} = erl_scan:string(binary_to_list(Body), 0, [return]),
@@ -31,7 +33,7 @@ skip_line(<<>>, Acc) ->
 escript_fix(<<$#, $!, Rest/binary>>) ->
     skip_line(Rest, [$!, $#]);
 escript_fix(Bin) ->
-    Bin.
+    {Bin, ""}.
 
 
 -record(state, {
@@ -151,6 +153,7 @@ is_safe_atom(_, List) ->
             (C) when C =:= $_ orelse C =:= $@ -> true;
             (_) -> false
         end, List).
+
 
 quoted_atom_to_list(Atom) ->
     List = atom_to_list(Atom),
