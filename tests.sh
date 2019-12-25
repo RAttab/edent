@@ -11,6 +11,7 @@ TESTS=(
     list
     expr
     macro
+    binary
     escape
 
     block_fun
