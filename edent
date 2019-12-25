@@ -248,6 +248,11 @@ state('<-', #state{ indent = Indent, stack = [{expr, _} | _] } = State) ->
 state('<-', #state{ indent = Indent, stack = Stack } = State) ->
     State#state{ indent = Indent + 1, stack = [{expr, Indent} | Stack] };
 
+state('!', #state{ indent = Indent, stack = [{expr, _} | _] } = State) ->
+    State#state{ indent = Indent + 1 };
+state('!', #state{ indent = Indent, stack = Stack } = State) ->
+    State#state{ indent = Indent + 1, stack = [{expr, Indent} | Stack] };
+
 state(dot = Token, #state { stack = [{expr, Indent} | Stack] } = State) ->
     state(Token, State#state{ indent = Indent, stack = Stack});
 state('|' = Token, #state { stack = [{expr, Indent} | Stack] } = State) ->

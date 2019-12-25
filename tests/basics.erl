@@ -3,7 +3,8 @@
 
 -export([
         fun_test/1,
-        atom_test/0
+        atom_test/0,
+        send_test/1
     ]).
 
 fun_test(ok) ->
@@ -20,3 +21,8 @@ atom_test() ->
     a_b@c,
     'Bob',
     'Weird Atom Because I Can'.
+
+send_test(X) ->
+    X
+    !
+        ok.

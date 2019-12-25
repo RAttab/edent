@@ -2,7 +2,7 @@
 stupid erlang code indenter
 
 TODO:
-- [ ] `!` (should probably be treated like `=`)
+- [x] `!` (should probably be treated like `=`)
 - [ ] macros
   - [ ] spec
   - [ ] record
