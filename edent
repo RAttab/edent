@@ -2,15 +2,23 @@
 %% -*- erlang -*-
 %%! -sname edent debug verbose
 
-main([Input, Output | _ ]) ->
+main(["-o", Output, Input]) ->
+    indent(Input, Output);
+main(Inputs) ->
+    [indent(Input, Input) || Input <- Inputs];
+main(_) ->
+    io:fwrite(standard_error,
+        "usage: edent <input>...~n"
+        "       edent -o <output> <input>~n", []),
+    halt(1).
+
+
+indent(Input, Output) ->
     {ok, Data} = file:read_file(Input),
     {Body, Header} = escript_fix(Data),
     {ok, Tokens, _} = erl_scan:string(binary_to_list(Body), 0, [return]),
-    ok = file:write_file(Output, [Header, process(Tokens)]),
-    halt(0);
-main(_) ->
-    io:fwrite(standard_error, "usage: edent <input> <output>~n", []),
-    halt(1).
+    ok = file:write_file(Output, [Header, process(Tokens)]).
+
 
 skip_line(<<$\n, Rest/binary>>, Acc) ->
     {Rest, lists:reverse([$\n | Acc])};
@@ -19,10 +27,12 @@ skip_line(<<C, Rest/binary>>, Acc) ->
 skip_line(<<>>, Acc) ->
     {<<>>, lists:reverse(Acc)}.
 
+
 escript_fix(<<$#, $!, Rest/binary>>) ->
     skip_line(Rest, [$!, $#]);
 escript_fix(Bin) ->
     Bin.
+
 
 -record(state, {
         indent = 0 :: pos_integer(),
@@ -36,14 +46,13 @@ process(Tokens) ->
 process([], Output, _) ->
     lists:reverse(Output);
 process(Tokens, Output, State) ->
-    erlang:display('-------------------------------------------------------'),
+    %% erlang:display('-------------------------------------------------------'),
     {Line, Rest} = next_line(Tokens),
-    erlang:display({line, State, Line}),
+    %% erlang:display({line, State, Line}),
     {LineFmt, StateFmt} = format_line(Line, State),
-    erlang:display({fmt, StateFmt, LineFmt}),
-    io:format(iolist_to_binary(LineFmt)),
+    %% erlang:display({fmt, StateFmt, LineFmt}),
+    %% io:format(iolist_to_binary(LineFmt)),
     process(Rest, [LineFmt | Output], StateFmt).
-
 
 
 next_line(Tokens) ->
@@ -82,7 +91,7 @@ format_line(Line, State) ->
 format_line([], Output, State) ->
     {lists:reverse([$\n | Output]), State};
 format_line([Token | Rest], Output, State) ->
-    erlang:display({token, Token, state(Token, State)}),
+    %% erlang:display({token, Token, state(Token, State)}),
     Result = format_line(Rest, [token_to_list(Token) | Output], state(Token, State)),
     Result.
 

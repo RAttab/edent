@@ -38,6 +38,6 @@ for TEST in "${TESTS[@]}"; do
         (cd /tmp && erlc "$input")
     fi
 
-    ./edent "$input" "$output"
+    ./edent -o "$output" "$input"
     diff "$input" "$output"
 done
