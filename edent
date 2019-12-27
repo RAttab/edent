@@ -38,6 +38,7 @@ escript_fix(Bin) ->
 
 -record(state, {
         indent = 0 :: pos_integer(),
+        type = false :: false | clause | spec,
         stack = [] :: list(atom())
     }).
 
@@ -182,9 +183,13 @@ trim(Tokens) ->
     Tokens.
 
 
-line_indent(Token, #state{ stack = [{expr, _} | Stack] } = State) ->
+line_indent(Token, #state{ stack = [{expr, _, _} | Stack] } = State) ->
     line_indent(Token, State#state{ stack = Stack });
 
+line_indent(')', #state{ stack = [{block, Indent, 'fun'} | _], type = clause }) ->
+    Indent;
+line_indent(')', #state{ stack = [{block, Indent, 'fun'} | _], type = spec }) ->
+    Indent;
 line_indent(')', #state{ stack = [{'(', Indent} | _] }) ->
     Indent;
 line_indent(')' = Token, State) ->
@@ -263,56 +268,92 @@ line_indent(dot, #state{ indent = Indent }) ->
 line_indent(_, #state{ indent = Indent }) ->
     Indent.
 
+close_type(#state{ type = false }) ->
+    false;
+close_type(#state{ type = clause, stack = [{expr, _, '::'} | _] }) ->
+    false;
+close_type(#state{ type = Type }) ->
+    Type.
 
 %% Denominates a macro
-state('-', #state{ indent = 0, stack = Stack } = State) ->
-    State#state{ stack = [macro | Stack] };
-
-state(dot = Token, #state { stack = [{expr, Indent} | Stack] } = State) ->
-    state(Token, State#state{ indent = Indent, stack = Stack});
-state('|' = Token, #state { stack = [{expr, Indent} | Stack] } = State) ->
-    state(Token, State#state{ indent = Indent, stack = Stack});
-state(';' = Token, #state { stack = [{expr, Indent} | Stack] } = State) ->
-    state(Token, State#state{ indent = Indent, stack = Stack});
-state(',' = Token, #state { stack = [{expr, Indent} | Stack] } = State) ->
-    state(Token, State#state{ indent = Indent, stack = Stack});
-state(')' = Token, #state { stack = [{expr, Indent} | Stack] } = State) ->
-    state(Token, State#state{ indent = Indent, stack = Stack});
-state('}' = Token, #state { stack = [{expr, Indent} | Stack] } = State) ->
-    state(Token, State#state{ indent = Indent, stack = Stack});
-state(']' = Token, #state { stack = [{expr, Indent} | Stack] } = State) ->
-    state(Token, State#state{ indent = Indent, stack = Stack});
-state('>>' = Token, #state { stack = [{expr, Indent} | Stack] } = State) ->
-    state(Token, State#state{ indent = Indent, stack = Stack});
-state('::' = Token, #state { stack = [{expr, Indent} | Stack] } = State) ->
-    state(Token, State#state{ indent = Indent, stack = Stack});
-state('||' = Token, #state { stack = [{expr, Indent} | Stack] } = State) ->
-    state(Token, State#state{ indent = Indent, stack = Stack});
-state('<-' = Token, #state { stack = [{expr, Indent} | Stack] } = State) ->
-    state(Token, State#state{ indent = Indent, stack = Stack});
-state('->' = Token, #state { stack = [{expr, Indent} | Stack] } = State) ->
-    state(Token, State#state{ indent = Indent, stack = Stack});
-state('=>' = Token, #state { stack = [{expr, Indent} | Stack] } = State) ->
-    state(Token, State#state{ indent = Indent, stack = Stack});
-state('of' = Token, #state { stack = [{expr, Indent} | Stack] } = State) ->
-    state(Token, State#state{ indent = Indent, stack = Stack});
-state('end' = Token, #state { stack = [{expr, Indent} | Stack] } = State) ->
-    state(Token, State#state{ indent = Indent, stack = Stack});
-state('after' = Token, #state { stack = [{expr, Indent} | Stack] } = State) ->
-    state(Token, State#state{ indent = Indent, stack = Stack});
-state('catch' = Token, #state { stack = [{expr, Indent} | Stack] } = State) ->
-    state(Token, State#state{ indent = Indent, stack = Stack});
-
-
-%% fun bob/0 is a construct that requires context to parse properly
-%% and the only way to disambiguate it from it's regular lambda format
-%% is to see if a `(` token is coming up next. To make that happen we
-%% push an `expect` entry on top of the `block` entry for fun and if
-%% we don't run into a `(` token next then we get rid of the `block`
-%% entry. Giant hack but can't think of anything else that doesn't
-%% require a rewrite...
-state('(' = Token, #state{ stack = [{expect, Token} | Stack] } = State) ->
+state('-', #state{ indent = 0, stack = [] } = State) ->
+    State#state{ stack = [{expect, spec}, macro] };
+state({atom, spec}, #state{ stack = [{expect, spec} | Stack] } = State) ->
+    State#state{ type = spec, stack = Stack };
+state(Token, #state{ stack = [{expect, spec} | Stack] } = State) ->
     state(Token, State#state{ stack = Stack });
+
+state(dot = Token, #state { stack = [{expr, Indent, _} | Stack] } = State) ->
+    state(Token, State#state{ indent = Indent, stack = Stack, type = close_type(State)});
+state(';' = Token, #state { stack = [{expr, Indent, _} | Stack] } = State) ->
+    state(Token, State#state{ indent = Indent, stack = Stack, type = close_type(State)});
+state(',' = Token, #state { stack = [{expr, Indent, _} | Stack] } = State) ->
+    state(Token, State#state{ indent = Indent, stack = Stack, type = close_type(State)});
+state(')' = Token, #state { stack = [{expr, Indent, _} | Stack] } = State) ->
+    state(Token, State#state{ indent = Indent, stack = Stack, type = close_type(State)});
+state('}' = Token, #state { stack = [{expr, Indent, _} | Stack] } = State) ->
+    state(Token, State#state{ indent = Indent, stack = Stack, type = close_type(State)});
+state(']' = Token, #state { stack = [{expr, Indent, _} | Stack] } = State) ->
+    state(Token, State#state{ indent = Indent, stack = Stack, type = close_type(State)});
+state('>>' = Token, #state { stack = [{expr, Indent, _} | Stack] } = State) ->
+    state(Token, State#state{ indent = Indent, stack = Stack, type = close_type(State)});
+state('::' = Token, #state { stack = [{expr, Indent, _} | Stack] } = State) ->
+    state(Token, State#state{ indent = Indent, stack = Stack, type = close_type(State)});
+state('||' = Token, #state { stack = [{expr, Indent, _} | Stack] } = State) ->
+    state(Token, State#state{ indent = Indent, stack = Stack, type = close_type(State)});
+state('<-' = Token, #state { stack = [{expr, Indent, _} | Stack] } = State) ->
+    state(Token, State#state{ indent = Indent, stack = Stack, type = close_type(State)});
+state('->' = Token, #state { stack = [{expr, Indent, _} | Stack] } = State) ->
+    state(Token, State#state{ indent = Indent, stack = Stack, type = close_type(State)});
+state('=>' = Token, #state { stack = [{expr, Indent, _} | Stack] } = State) ->
+    state(Token, State#state{ indent = Indent, stack = Stack, type = close_type(State)});
+state('of' = Token, #state { stack = [{expr, Indent, _} | Stack] } = State) ->
+    state(Token, State#state{ indent = Indent, stack = Stack, type = close_type(State)});
+state('end' = Token, #state { stack = [{expr, Indent, _} | Stack] } = State) ->
+    state(Token, State#state{ indent = Indent, stack = Stack, type = close_type(State)});
+state('after' = Token, #state { stack = [{expr, Indent, _} | Stack] } = State) ->
+    state(Token, State#state{ indent = Indent, stack = Stack, type = close_type(State)});
+state('catch' = Token, #state { stack = [{expr, Indent, _} | Stack] } = State) ->
+    state(Token, State#state{ indent = Indent, stack = Stack, type = close_type(State)});
+
+
+%% the `fun` keyword denominates the start of one of 3 variants:
+%%
+%% 1) lambda:    `fun (X) -> ok; (_) -> ok end`
+%% 2) reference: `fun my_fun/1`
+%% 3) type:      `fun((any()) -> any())`
+%%
+%% The lambda variant (1)x is straight forward it behaves like any
+%% other regular block and it has an `end` token that we can use to
+%% terminate it.
+%%
+%% Variant (2)  is not  an indent block  and therefore  doesn't really
+%% cause any indent changes. The only  real way to detect this variant
+%% is to know  whether a `(` token follows the  `fun` token. If that's
+%% not the  case then we're  in variant (2).  To make that  happen, we
+%% push an  `{expect, '('}` entry  on top  of the `{block,  _, 'fun'}`
+%% entry  on the  stack such  that  if the  next non-whitespace  token
+%% happens to be a `(` token then we know we're in variant (1), and we
+%% can  keep the  `{block, _,  'fun'}` entry  on the  stack. Otherwise
+%% we're in variant (2) and we get rid of the block entry.
+%%
+%% Confused yet? But wait there's more...
+%%
+%% Variant (3) has actually two `(` tokens after the `fun` token and
+%% is ambiguous with our previous detection mechanism. But this
+%% variant only exists if we're defining a type. This is where the
+%% `type` entry in `#state` comes in handy. If we know that we're in a
+%% type definition, then if we run into a `(` token while `{expect,
+%% '('}` is at the top of our stack then we just merge the block for
+%% `(` with the block for `fun` such that the matching `)` will now
+%% close the `fun` block.
+%%
+%% I like erlang syntax...
+
+state('(' = Token, #state{ type = false, stack = [{expect, Token} | Stack] } = State) ->
+    state(Token, State#state{ stack = Stack });
+state('(' = Token, #state{ stack = [{expect, Token} | Stack] } = State) ->
+    State#state{ stack = Stack };
 state({white_space, _}, #state{ stack = [{expect, _} | _] } = State) ->
     State;
 state(Token, #state{ stack = [{expect, '('}, {block, Indent, 'fun'} | Stack] } = State) ->
@@ -321,30 +362,32 @@ state('fun' = Token, #state{ indent = Indent, stack = Stack } = State) ->
     State#state{ indent = Indent + 1, stack = [{expect, '('}, {block, Indent, Token} | Stack] };
 
 
-state('=', #state{ indent = Indent, stack = [{expr, _} | _] } = State) ->
+state('=', #state{ indent = Indent, stack = [{expr, _, _} | _] } = State) ->
     State#state{ indent = Indent + 1 };
-state('=', #state{ indent = Indent, stack = Stack } = State) ->
-    State#state{ indent = Indent + 1, stack = [{expr, Indent} | Stack] };
+state('=' = Token, #state{ indent = Indent, stack = Stack } = State) ->
+    State#state{ indent = Indent + 1, stack = [{expr, Indent, Token} | Stack] };
 
-state('<-', #state{ indent = Indent, stack = [{expr, _} | _] } = State) ->
+state('<-', #state{ indent = Indent, stack = [{expr, _, _} | _] } = State) ->
     State#state{ indent = Indent + 1 };
-state('<-', #state{ indent = Indent, stack = Stack } = State) ->
-    State#state{ indent = Indent + 1, stack = [{expr, Indent} | Stack] };
+state('<-' = Token, #state{ indent = Indent, stack = Stack } = State) ->
+    State#state{ indent = Indent + 1, stack = [{expr, Indent, Token} | Stack] };
 
-state('!', #state{ indent = Indent, stack = [{expr, _} | _] } = State) ->
+state('!', #state{ indent = Indent, stack = [{expr, _, _} | _] } = State) ->
     State#state{ indent = Indent + 1 };
-state('!', #state{ indent = Indent, stack = Stack } = State) ->
-    State#state{ indent = Indent + 1, stack = [{expr, Indent} | Stack] };
+state('!' = Token, #state{ indent = Indent, stack = Stack } = State) ->
+    State#state{ indent = Indent + 1, stack = [{expr, Indent, Token} | Stack] };
 
-state('::', #state{ indent = Indent, stack = [macro] } = State) ->
-    State#state{ indent = Indent + 1 };
-state('::', #state{ indent = Indent, stack = [{expr, _} | _] } = State) ->
-    State#state{ indent = Indent + 1 };
-state('::', #state{ indent = Indent, stack = Stack } = State) ->
-    State#state{ indent = Indent + 1, stack = [{expr, Indent} | Stack] };
+state('::' = Token, #state{ indent = Indent, type = spec, stack = Stack } = State) ->
+    State#state{ indent = Indent + 1, stack = [{expr, Indent, Token} | Stack] };
+state('::' = Token, #state{ indent = Indent, stack = Stack } = State) ->
+    State#state{ indent = Indent + 1, stack = [{expr, Indent, Token} | Stack], type = clause };
 
 state('(' = Token, #state{ indent = Indent, stack = Stack } = State) ->
     State#state{ indent = Indent + 1, stack = [{Token, Indent} | Stack] };
+state(')', #state{ stack = [{block, Indent, 'fun'} | Stack], type = clause } = State ) ->
+    State#state{ indent = Indent, stack = Stack };
+state(')', #state{ stack = [{block, Indent, 'fun'} | Stack], type = spec } = State ) ->
+    State#state{ indent = Indent, stack = Stack };
 state(')', #state{ stack = [{'(', Indent} | Stack] } = State ) ->
     State#state{ indent = Indent, stack = Stack };
 state(')' = Token, State) ->
@@ -450,7 +493,7 @@ state(';' = Token, State) ->
     throw({unmatched, Token, State});
 
 state(dot, #state{ stack = [macro] } = State) ->
-    State#state{ indent = 0, stack = [] };
+    State#state{ indent = 0, type = false, stack = [] };
 state(dot, #state{ stack = [{block, Indent, top} | Stack] } = State ) ->
     State#state{ indent = Indent, stack = Stack };
 state(dot = Token, State) ->
