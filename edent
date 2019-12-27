@@ -227,6 +227,8 @@ line_indent('->', #state{ stack = [{block, Indent, 'receive'} | _] }) ->
     Indent + 1;
 line_indent('->', #state{ stack = [{block, Indent, 'when'} | _] }) ->
     Indent;
+line_indent('when', #state{ stack = [macro] }) ->
+    0;
 line_indent('when', #state{ stack = [{block, Indent, 'fun'} | _] }) ->
     Indent + 1;
 line_indent('catch', #state{ stack = [{block, Indent, 'try'} | _] }) ->
@@ -380,6 +382,8 @@ state('begin' = Token, #state{ indent = Indent, stack = Stack } = State) ->
 state('receive' = Token, #state{ indent = Indent, stack = Stack } = State) ->
     State#state{ indent = Indent + 1, stack = [{block, Indent, Token} | Stack] };
 
+state('when', #state{ stack = [macro]} = State) ->
+    State;
 state('when' = Token, #state{ stack = [{block, Indent, 'fun'}] = Stack} = State) ->
     State#state{ indent = Indent + 2, stack = [{block, Indent + 1, Token} | Stack] };
 state('when' = Token, #state{ indent = Indent, stack = Stack } = State) ->
@@ -445,10 +449,8 @@ state(';', #state{ stack = [{block, Indent, _} | _] } = State) ->
 state(';' = Token, State) ->
     throw({unmatched, Token, State});
 
-state(dot, #state{ indent = 0, stack = [macro | Stack] } = State) ->
-    State#state{ stack = Stack };
-state(dot, #state{ indent = Indent, stack = [macro | Stack] } = State) ->
-    State#state{ indent = Indent - 1, stack = Stack };
+state(dot, #state{ stack = [macro] } = State) ->
+    State#state{ indent = 0, stack = [] };
 state(dot, #state{ stack = [{block, Indent, top} | Stack] } = State ) ->
     State#state{ indent = Indent, stack = Stack };
 state(dot = Token, State) ->

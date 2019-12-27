@@ -1,7 +1,8 @@
 -module(macro).
 
 -export([
-        spec_test/2
+        spec_test/2,
+        spec_when_test/1
     ]).
 
 -record(record_test, {
@@ -40,7 +41,22 @@
 ->
     ok
     |
-    error.
+    error
+    .
 
 spec_test(_, _) ->
+    ok.
+
+-spec spec_when_test(
+    Name
+)
+->
+    ok
+when
+    Name
+    ::
+        ok
+        .
+
+spec_when_test(_) ->
     ok.
