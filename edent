@@ -301,6 +301,24 @@ state('after' = Token, #state { stack = [{expr, Indent} | Stack] } = State) ->
 state('catch' = Token, #state { stack = [{expr, Indent} | Stack] } = State) ->
     state(Token, State#state{ indent = Indent, stack = Stack});
 
+
+%% fun bob/0 is a construct that requires context to parse properly
+%% and the only way to disambiguate it from it's regular lambda format
+%% is to see if a `(` token is coming up next. To make that happen we
+%% push an `expect` entry on top of the `block` entry for fun and if
+%% we don't run into a `(` token next then we get rid of the `block`
+%% entry. Giant hack but can't think of anything else that doesn't
+%% require a rewrite...
+state('(' = Token, #state{ stack = [{expect, Token} | Stack] } = State) ->
+    state(Token, State#state{ stack = Stack });
+state({white_space, _}, #state{ stack = [{expect, _} | _] } = State) ->
+    State;
+state(Token, #state{ stack = [{expect, '('}, {block, Indent, 'fun'} | Stack] } = State) ->
+    state(Token, State#state{ indent = Indent, stack = Stack });
+state('fun' = Token, #state{ indent = Indent, stack = Stack } = State) ->
+    State#state{ indent = Indent + 1, stack = [{expect, '('}, {block, Indent, Token} | Stack] };
+
+
 state('=', #state{ indent = Indent, stack = [{expr, _} | _] } = State) ->
     State#state{ indent = Indent + 1 };
 state('=', #state{ indent = Indent, stack = Stack } = State) ->
@@ -352,8 +370,6 @@ state('}' = Token, State) ->
     throw({unmatched, Token, State});
 
 state('if' = Token, #state{ indent = Indent, stack = Stack } = State) ->
-    State#state{ indent = Indent + 1, stack = [{block, Indent, Token} | Stack] };
-state('fun' = Token, #state{ indent = Indent, stack = Stack } = State) ->
     State#state{ indent = Indent + 1, stack = [{block, Indent, Token} | Stack] };
 state('try' = Token, #state{ indent = Indent, stack = Stack } = State) ->
     State#state{ indent = Indent + 1, stack = [{block, Indent, Token} | Stack] };

@@ -4,7 +4,8 @@
         basic_test/0,
         multi_test/0,
         when_test/0,
-        param_test/0
+        param_test/0,
+        reference_test/0
     ]).
 
 basic_test() ->
@@ -63,3 +64,8 @@ param_test() ->
         ->
             ok
     end.
+
+reference_test() ->
+    fun param_test/0,
+    fun () -> ok end (),
+    ok.
