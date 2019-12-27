@@ -2,7 +2,8 @@
 
 -export([
         spec_test/2,
-        spec_when_test/1
+        spec_when_test/1,
+        spec_lambda_test/2
     ]).
 
 -record(record_test, {
@@ -59,4 +60,33 @@ when
         .
 
 spec_when_test(_) ->
+    ok.
+
+-spec spec_lambda_test(
+    Name,
+    fun
+        (
+            (
+                X
+            )
+            ->
+                ok
+        )
+)
+->
+    ok
+when
+    Name
+    ::
+        fun
+            (
+                (
+                    X
+                )
+                ->
+                    ok
+            )
+            .
+
+spec_lambda_test(_, _) ->
     ok.
