@@ -104,7 +104,7 @@ process(Tokens, Binary, Output, State) ->
 
 
 next_line_bin(Data, eof) ->
-    Data;
+    {Data, <<>>};
 next_line_bin(Data, Count) ->
     next_line_bin(Data, <<>>, Count).
 
@@ -124,8 +124,8 @@ next_line_tok([Token | _] = Tokens) ->
     Start = erl_scan:line(Token),
     {Line, Rest, Loc} = next_line_tok(Tokens, []),
     Count = case Loc of
-            End -> End - Start + 1;
-            eof -> eof
+            eof -> eof;
+            End -> End - Start + 1
         end,
     {Line, Rest, Count}.
 
