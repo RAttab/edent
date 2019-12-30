@@ -1,12 +1,3 @@
-%% Because the lexer in erlang removes all the escape sequences and
-%% just gives you the raw characters, it's strictly not possible to
-%% determine what the original character in a string was.
-%%
-%% This file also serves as documentation of the choices we made with
-%% what will be escaped and what won't.
-%%
-%% TODO: hex and octal encodings
-
 -module(escape).
 
 -export([
@@ -32,6 +23,8 @@ literal() ->
         $\t,
         $\v,
         $\\,
+        $\',
+        $\",
 
         $\^A,
         $\^C,
@@ -50,9 +43,11 @@ string() ->
         "\f",
         "\n",
         "\r",
+        "\s",
         "\t",
         "\v",
         "\"",
+        "\'",
         "\\",
 
         "\^A",

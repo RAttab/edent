@@ -81,23 +81,6 @@ to sanity.
   end-of-lines in your file. This might be fixable upstream, and I'll open an
   issue at some point.
 
-- `erl_scan` converts all escape sequences into their actual character.
-
-  ```erlang
-  1> erl_scan:string("$a,$\n,$^C,$\hFFFF", 0, [return]).
-  {ok,[{char,0,97},
-     {',',0},
-     {char,0,10},
-     {',',1},
-     {char,1,94},
-     {var,1,'C'},
-     {',',1},
-     {char,1,104},
-     {var,1,'FFFF'}],
-    1}
-  ```
-
-  Because of this, edent just sort of has to guess which characters to escape
-  and which ones to keep as is. The chosen behaviour is documented in this test:
-  [escape.erl](tests/escape.erl). I have a feeling that this is strictly not
-  fixable upstream as too much code depends on this behaviour so... \shrug
+- There's a few known pieces of syntax that `edent` can't handle. These are
+  documented in the [tests/hell.erl](hell.erl) test cases. Hopefully these
+  should be relatively rare in the wild.

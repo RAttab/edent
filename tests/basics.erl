@@ -4,7 +4,8 @@
 -export([
         fun_test/1,
         atom_test/0,
-        send_test/1
+        send_test/1,
+        multiline_string_test/0
     ]).
 
 fun_test(ok) ->
@@ -26,3 +27,7 @@ send_test(X) ->
     X
     !
         ok.
+
+multiline_string_test() ->
+    "abc
+     def".
