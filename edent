@@ -87,7 +87,7 @@ process(Tokens, Bin, State) ->
     process(Tokens, Bin, [], State).
 
 process([], _, Output, _) ->
-    lists:reverse(Output);
+    lists:reverse(trim_output(Output));
 process(Tokens, Binary, Output, State) ->
     debug(State, '------------------------------------------------------------------------------------------------'),
 
@@ -106,6 +106,14 @@ process(Tokens, Binary, Output, State) ->
 
     debug(State, {final, NextState}),
     process(RestTok, RestBin, [LineFmt | Output], NextState).
+
+
+trim_output([Line | Rest] = Output) ->
+    case trim(iolist_to_binary(Line)) of
+        <<>> -> trim_output(Rest);
+        <<$\n>> -> trim_output(Rest);
+        _ -> Output
+    end.
 
 
 next_line_bin(Data, eof) ->
