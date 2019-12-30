@@ -11,13 +11,13 @@ Code indenter for Erlang.
 - Should clean up trailing whitespaces
 - Should be self-contained. Dependency on OTP is ok.
 
-An important side effect of keeping things simple is that edent is not
-customizable. **It has one indentation style and that's it**.
+As a side-effect of keeping things stupid-simple, edent **has one indentation
+style**. There are currently no plans or desire to make it customizable.
 
 If you see problems, then please create a PR containing a test with what the
-indentation should look like. Note that if the change is subjective in nature
-then get your hopes up. Note that you can always fork and modify to suite your
-personal predilections.
+indentation should look like. Keep in mind that if your change is subjective in
+nature it will likely be denied. If that angers you, you can always fork and
+modify to suite your personal predilections.
 
 
 ## Usage
@@ -27,8 +27,8 @@ should be fine.
 
 ```sh
 $ ./edent
-usage: edent <input>...
-       edent -o <output> <input>
+usage: edent [-v] <input>...
+       edent [-v] -o <output> <input>
 ```
 
 The first form will overwrite each input file with their indented versions. This
@@ -40,6 +40,12 @@ $ find . -name '*.erl' | xargs ./edent
 
 The second form is mostly useful for testing and debugging where you want to not
 overwrite the orignal file. It's currently used for the test suite of edent.
+
+Note that [pre-commit](pre-commit) hook is also available for git and expects
+`edent` to exist at the root of your repo.
+
+Finally, the `-v` option exists for debugging `edent` and outputs internal
+debugging information.
 
 
 ## Development
@@ -82,5 +88,7 @@ to sanity.
   issue at some point.
 
 - There's a few known pieces of syntax that `edent` can't handle. These are
-  documented in the [tests/hell.erl](hell.erl) test cases. Hopefully these
+  documented in the [hell.erl](tests/hell.erl) test cases. Hopefully these
   should be relatively rare in the wild.
+
+- `edent` is quite slow at the moment and I consider that a bug.

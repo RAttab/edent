@@ -27,10 +27,17 @@ print(_, Term) ->
     io:format(Term).
 
 
+main([]) ->
+    usage();
 main(Args) ->
     indent(config(Args)),
     halt(0).
 
+usage() ->
+    io:fwrite(standard_error,
+        "usage: edent [-v] <input>...~n"
+        "       edent [-v] -o <output> <input>~n", []),
+    halt(1).
 
 config(Args) ->
     config(Args, #config{}).
@@ -47,10 +54,8 @@ config(["-o", Output, Input], Config) ->
 config(Inputs, Config) ->
     Config#config{ inputs = Inputs };
 config(_, _) ->
-    io:fwrite(standard_error,
-        "usage: edent [-v] <input>...~n"
-        "       edent [-v] -o <output> <input>~n", []),
-    halt(1).
+    usage().
+
 
 indent(#config{ debug = Debug, output = undefined, inputs = Inputs }) ->
     lists:map(fun (File) -> indent(File, File, Debug) end, Inputs);
